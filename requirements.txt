@@ -1,0 +1,3 @@
+surya-ocr
+pypdf2
+notebook
