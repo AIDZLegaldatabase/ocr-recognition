@@ -124,18 +124,85 @@ class ImageBuilder:
         if self.raw_image is None:
             raise ValueError("Raw image is not set.")
         self.raw_image.show()
+    
+    def visualize_margin_and_layout(self, margin=5):
+        """
+        Visualize the layout boxes with added margins and the text boxes within them.
+
+        Args:
+            margin (int): Margin to adjust bounding boxes for visualization. Defaults to 5.
+
+        Returns:
+            PIL.Image.Image: Annotated image.
+        """
+        if self.raw_image is None or self.layout_data is None or self.text_data is None:
+            raise ValueError("Image, layout data, or text data is not set.")
+
+        annotated_image = self.raw_image.copy()
+        draw = ImageDraw.Draw(annotated_image)
+
+        # Font for text annotations
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except IOError:
+            font = ImageFont.load_default()
+
+        # Iterate over layout boxes
+        for layout in self.layout_data:
+            # Adjust layout bbox with margin
+            layout_bbox = [
+                layout.bbox[0] - margin,  # x_min - margin
+                layout.bbox[1] - margin,  # y_min - margin
+                layout.bbox[2] + margin,  # x_max + margin
+                layout.bbox[3] + margin,  # y_max + margin
+            ]
+
+            # Draw the adjusted layout box
+            draw.rectangle(layout_bbox, outline="green", width=2)
+
+            # Collect all text boxes within the layout bbox
+            texts_in_layout = []
+            for text in self.text_data:
+                text_bbox = text.bbox
+                if (
+                    layout_bbox[0] <= text_bbox[0] and layout_bbox[1] <= text_bbox[1] and
+                    layout_bbox[2] >= text_bbox[2] and layout_bbox[3] >= text_bbox[3]
+                ):
+                    texts_in_layout.append({
+                        "text": text.text,
+                        "bbox": text_bbox,
+                        "start_point": text_bbox[:2],  # First point (x_min, y_min)
+                    })
+
+            # Sort text boxes by y-coordinate, then x-coordinate
+            sorted_texts = sorted(
+                texts_in_layout,
+                key=lambda item: (item["start_point"][1], item["start_point"][0])
+            )
+
+            # Merge texts in order
+            merged_text = " ".join([text["text"] for text in sorted_texts])
+
+            # Draw each text box and annotate
+            for text in sorted_texts:
+                text_bbox = text["bbox"]
+                draw.rectangle(text_bbox, outline="blue", width=1)
+
+            # Annotate the layout box with the merged text
+            label_text = f"{layout.label}: {merged_text}"
+            draw.text((layout_bbox[0], layout_bbox[1] - 15), label_text, fill="red", font=font)
+
+        return annotated_image
 
     def match_making_texts_to_layouts(self, margin=5):
         """
-        Match text boxes to layout boxes based on adjusted bounding boxes, optimized for one-to-one mapping.
+        Match and merge text boxes into layout boxes based on adjusted bounding boxes and ordering.
 
         Args:
-            layout_data (list): List of LayoutBox objects containing layout information.
-            texts_data (list): List of TextLine objects containing text information.
             margin (int, optional): Margin to adjust bounding boxes for matching. Defaults to 5.
 
         Returns:
-            list: A list of dictionaries with matched layout and text information.
+            list: A list of dictionaries with merged text and layout information.
         """
         matched_results = []
 
@@ -149,21 +216,37 @@ class ImageBuilder:
                 layout.bbox[3] + margin,  # y_max + margin
             ]
 
-            # Find the first matching text box
-            for text in self.texts_data:
+            # Collect all text boxes within the layout bbox
+            texts_in_layout = []
+            for text in self.text_data:
                 text_bbox = text.bbox
                 if (
                     layout_bbox[0] <= text_bbox[0] and layout_bbox[1] <= text_bbox[1] and
                     layout_bbox[2] >= text_bbox[2] and layout_bbox[3] >= text_bbox[3]
                 ):
-                    matched_results.append({
-                        "bbox_text": text_bbox,
-                        "bbox_layout": layout_bbox,
+                    texts_in_layout.append({
                         "text": text.text,
-                        "label": layout.label,
-                        "position": layout.position,
+                        "bbox": text_bbox,
+                        "start_point": text_bbox[:2],  # First point (x_min, y_min)
                     })
-                    # texts_data.remove(text)  # Remove matched text to avoid redundant checks
-                    break  # Stop searching for texts for this layout
+
+            # Sort text boxes by y-coordinate, then x-coordinate
+            sorted_texts = sorted(
+                texts_in_layout,
+                key=lambda item: (item["start_point"][1], item["start_point"][0])
+            )
+
+            # Merge texts in order
+            merged_text = " ".join([text["text"] for text in sorted_texts])
+
+            # Append the result
+            if sorted_texts:  # Only add if there are texts within the layout box
+                matched_results.append({
+                    "bbox_text": [text["bbox"] for text in sorted_texts],
+                    "bbox_layout": layout_bbox,
+                    "text": merged_text,
+                    "label": layout.label,
+                    "position": layout.position,
+                })
 
         return matched_results
