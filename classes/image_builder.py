@@ -41,35 +41,8 @@ class ImageBuilder:
         """
         if self.raw_image is None or self.layout_data is None:
             raise ValueError("Data of layout or raw image is not properly set.")
-
-        return self._draw_layout_boxes(self.raw_image, self.layout_data)
-    
-    def draw_text_on_image(self):
-        """
-        Draw layout bounding boxes on the image with labels and positions.
-
-        Raises:
-            ValueError: If raw_image or layout_data is not set.
-        """
-        if self.raw_image is None or self.text_data is None:
-            raise ValueError("Data of layout or raw image is not properly set.")
-
-        return self._draw_layout_boxes(self.raw_image, self.text_data)
-
-    @staticmethod
-    def _draw_layout_boxes(image, layout_results):
-        """
-        Draw layout bounding boxes on the image with labels and positions.
-
-        Args:
-            image (PIL.Image.Image): The image to draw on.
-            layout_results (list): List of layout results, where each result has
-                                   attributes polygon, label, position, and confidence.
-
-        Returns:
-            PIL.Image.Image: The annotated image.
-        """
-        annotated_image = image.copy()
+        
+        annotated_image = self.raw_image.copy()
         draw = ImageDraw.Draw(annotated_image)
 
         # Font for text (optional, adjust path to a font file if needed)
@@ -79,7 +52,7 @@ class ImageBuilder:
             font = ImageFont.load_default()
 
         # Iterate through each layout box
-        for box in layout_results:
+        for box in self.layout_data:
             # Extract polygon and label
             polygon = [(int(x), int(y)) for x, y in box.polygon]  # Convert to integers
             label = box.label
@@ -95,6 +68,54 @@ class ImageBuilder:
             draw.text(text_position, label_text, fill="blue", font=font)
 
         return annotated_image
+
+    
+    def draw_text_on_image(self):
+        """
+        Draw layout bounding boxes on the image with labels and positions.
+
+        Raises:
+            ValueError: If raw_image or layout_data is not set.
+        """
+        if self.raw_image is None or self.text_data is None:
+            raise ValueError("Data of layout or raw image is not properly set.")
+
+        """
+        Draw layout bounding boxes on the image with labels and positions.
+
+        Raises:
+            ValueError: If raw_image or layout_data is not set.
+        """
+        if self.raw_image is None or self.text_data is None:
+            raise ValueError("Data of layout or raw image is not properly set.")
+        
+        annotated_image = self.raw_image.copy()
+        draw = ImageDraw.Draw(annotated_image)
+
+        # Font for text (optional, adjust path to a font file if needed)
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except IOError:
+            font = ImageFont.load_default()
+
+        # Iterate through each layout box
+        for box in self.text_data:
+            # Extract polygon and label
+            polygon = [(int(x), int(y)) for x, y in box.polygon]  # Convert to integers
+            label = box.text
+            if len(label) > 15:
+                label = f"{label[:5]}...{label[-5:]}"
+
+            # Draw polygon
+            draw.polygon(polygon, outline="red", width=2)
+
+            # Annotate with label and position
+            label_text = f"{label}"
+            text_position = (polygon[0][0], polygon[0][1] - 10)  # Above the box
+            draw.text(text_position, label_text, fill="blue", font=font)
+
+        return annotated_image
+
 
     def display_image(self):
         """

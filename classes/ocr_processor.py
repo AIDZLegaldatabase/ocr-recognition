@@ -11,6 +11,7 @@ from surya.model.recognition.model import load_model as load_rec_model
 from surya.model.recognition.processor import load_processor as load_rec_processor
 
 from surya.ocr import run_recognition
+from surya.ocr import run_ocr
 
 class OcrProcessor:
     def __init__(self):
@@ -77,3 +78,19 @@ class OcrProcessor:
             polygons=[layout_polygons])
         return layout_recognition_results[0].text_lines
         
+    def run_ocr_separate_text_recognition_fr(self, image: Image)-> list:
+        """
+        returns the list of TextLine(
+                polygon=[
+                    [505.0, 206.0],
+                    [961.0, 206.0],
+                    [961.0, 223.0],
+                    [505.0, 223.0],
+                ],
+                confidence=None,
+                text=" CARA CONSERVANCE OFF CALL CARRENT PACK TE CORES T X COURS AN A GRANT OF X THARRY OF DAY",
+                bbox=[505.0, 206.0, 961.0, 223.0],
+                )
+        """
+        predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor)
+        return predictions[0].text_lines
