@@ -44,3 +44,25 @@ class JoradpImporter:
                 break
 
             number += 1
+
+    @staticmethod
+    def get_pdf_files(directory):
+        """
+        Retrieves a list of all PDF files in the given directory.
+
+        Args:
+            directory (str): The path to the directory containing the PDF files.
+
+        Returns:
+            list: A list of file paths to the PDF files.
+        """
+        if not os.path.exists(directory):
+            raise ValueError(f"The directory '{directory}' does not exist.")
+        
+        pdf_files = [
+            os.path.join(directory, file)
+            for file in os.listdir(directory)
+            if file.endswith(".pdf")
+        ]
+        
+        return pdf_files

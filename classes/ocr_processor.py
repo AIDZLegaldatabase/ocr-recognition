@@ -13,6 +13,8 @@ from surya.model.recognition.processor import load_processor as load_rec_process
 from surya.ocr import run_recognition
 from surya.ocr import run_ocr
 
+from pytesseract import image_to_osd
+
 class OcrProcessor:
     def __init__(self):
         """
@@ -94,3 +96,31 @@ class OcrProcessor:
         """
         predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor)
         return predictions[0].text_lines
+    
+    @staticmethod
+    def get_orientation_adjustments(image, debug=False)->int:
+        """
+        Detect the orientation of a page using Tesseract's OSD
+        Args:
+            image Image
+        Returns:
+            int: Degree of needed orientation
+        """
+        try:
+
+            # Use Tesseract's OSD feature to detect orientation
+            osd_data = image_to_osd(image)
+            
+            # Parse the output for relevant details
+            osd_lines = osd_data.split("\n")
+            orientation = {
+                "angle": int(osd_lines[1].split(":")[-1].strip()),  # Rotation angle
+                "script": osd_lines[4].split(":")[-1].strip(),      # Detected script
+                "confidence": float(osd_lines[5].split(":")[-1].strip()),  # Confidence
+            }
+            if (orientation['angle'] != 0) and debug:
+                print("this image needed orientation by " + str(orientation['angle']))
+            return int(orientation['angle'])
+        except Exception as e:
+            print(f"Error detecting orientation: {e}")
+            return 0

@@ -3,3 +3,4 @@ pypdf2
 notebook
 pdf2image
 Pillow
+pytesseract

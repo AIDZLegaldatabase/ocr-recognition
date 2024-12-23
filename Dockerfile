@@ -7,14 +7,21 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
     libxrender1 \
-    libxext6
+    libxext6 \
+    tesseract-ocr \
+    poppler-utils && \
+    apt-get clean
 
 
-# Install Poppler utils for PDF rendering
-RUN apt-get update && apt-get install -y poppler-utils
 
 # Set work directory
 WORKDIR /app
+
+# Set environment variables to enable Surya model compilation
+ENV COMPILE_RECOGNITION=true \
+    COMPILE_DETECTOR=true \
+    COMPILE_LAYOUT=true \
+    COMPILE_TABLE_REC=true
 
 # Copy requirements and install dependencies
 COPY requirements.txt .

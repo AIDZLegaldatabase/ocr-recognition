@@ -1,3 +1,5 @@
+from classes.image_builder import ImageBuilder
+from classes.ocr_processor import OcrProcessor
 from pdf2image import convert_from_path
 from PIL import Image
 
@@ -8,9 +10,6 @@ class JoradpFileParse:
         """
         self.pdf_path = pdf_path
         self.images = []
-        self.ocr_layout = []
-        self.ocr_lines = []
-        self.ocr_texts = []
 
     def get_images(self, dpi: int = 300) -> list:
         """
@@ -67,6 +66,42 @@ class JoradpFileParse:
 
         self.images =  resized_images
 
+    def adjust_all_images_rotations(self, ocr: OcrProcessor):
+        """
+        Crop the specified number of pixels from the imported images.
+
+        Args:
+            image (PIL.Image.Image): The image to crop.
+            top (int): Number of pixels to crop from the top.
+            left (int): Number of pixels to crop from the left.
+            right (int): Number of pixels to crop from the right.
+            bottom (int): Number of pixels to crop from the bottom.
+
+        Returns:
+            PIL.Image.Image: The cropped image.
+        """
+        resized_images = []
+        for img in self.images:
+            rotation = ocr.get_orientation_adjustments(img)
+            resized_images.append(self.rotate_image_degrees_auto(img, rotation))
+
+        self.images =  resized_images
+    
+    def parse_images_to_text_structure(self, ocr: OcrProcessor):
+        usedImages = self.images[2:]
+        result_ocr = []
+        page = 0
+        for img in usedImages:
+            layouts = ocr.run_layout_order_detection(img)
+            detected_textes = ocr.run_ocr_separate_text_recognition_fr(img)
+            # add image if debugging is needed
+            imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
+            # 10 is best margin through tests
+            result = imageTest.match_making_texts_to_layouts(margin=10)
+            result_ocr.append({ 'index': page, 'page': result})
+            page += 1
+        return result_ocr
+
     @staticmethod
     def crop(image, top=0, left=0, right=0, bottom=0)-> Image:
         """
@@ -91,3 +126,29 @@ class JoradpFileParse:
         # Crop the image
         cropped_image = image.crop(crop_box)
         return cropped_image
+    
+
+    
+    @staticmethod
+    def rotate_image_degrees_auto(image: Image, degrees: int) -> Image:
+        """
+        Rotate an image by 90 degrees while adjusting the height and width.
+
+        Args:
+            image (PIL.Image.Image): The image to rotate.
+            clockwise (bool): Rotate clockwise if True, otherwise counterclockwise.
+
+        Returns:
+            PIL.Image.Image: The rotated image.
+        """
+        if (degrees == 0):
+            return image
+        # Rotate the image
+        if (degrees == 270):
+            return  image.transpose(Image.Transpose.ROTATE_270)
+        elif (degrees == 90):
+            return image.transpose(Image.Transpose.ROTATE_90)
+        else:
+            print(" Wrong rotation asked for " + str(degrees))
+        
+        return image
