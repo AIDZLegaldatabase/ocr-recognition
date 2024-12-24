@@ -21,16 +21,16 @@ class JoradpImporter:
         while True:
             # Format the file number as a three-digit string
             file_number = f"{number:03}"
-            url = f"{base_url}{year}/F{year}{file_number}.pdf"
+            url = f"{base_url}/F{year}{file_number}.pdf"
             save_path = os.path.join(save_directory, f"F{year}{file_number}.pdf")
 
             try:
-                print(f"Attempting to download: {url}")
+                #print(f"Attempting to download: {url}")
                 response = requests.get(url, stream=True)
 
                 # Check for 404 status to stop the loop
                 if response.status_code == 404:
-                    print(f"File not found: {url}. Stopping.")
+                    # print(f"File not found: {url}. Stopping.")
                     break
 
                 # Save the PDF file if found
@@ -38,7 +38,7 @@ class JoradpImporter:
                     for chunk in response.iter_content(chunk_size=1024):
                         pdf_file.write(chunk)
 
-                print(f"Downloaded: {save_path}")
+                # print(f"Downloaded: {save_path}")
             except Exception as e:
                 print(f"Error downloading {url}: {e}")
                 break

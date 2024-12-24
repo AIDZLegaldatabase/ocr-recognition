@@ -119,7 +119,8 @@ class OcrProcessor:
                 "confidence": float(osd_lines[5].split(":")[-1].strip()),  # Confidence
             }
             if (orientation['angle'] != 0) and debug:
-                print("this image needed orientation by " + str(orientation['angle']))
+                #print("this image needed orientation by " + str(orientation['angle']))
+                pass
             return int(orientation['angle'])
         except Exception as e:
             print(f"Error detecting orientation: {e}")
