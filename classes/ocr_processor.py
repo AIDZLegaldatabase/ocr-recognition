@@ -14,6 +14,7 @@ from surya.ocr import run_recognition
 from surya.ocr import run_ocr
 
 from pytesseract import image_to_osd
+import torch
 
 class OcrProcessor:
     def __init__(self):
@@ -21,14 +22,47 @@ class OcrProcessor:
         Initialize with Surya models and processors for detection and layout.
         """
         # detection & layout init
-        self.layout_model = load_layout_model()
-        self.layout_processor = load_layout_processor()
+        self.layout_model = None
+        self.layout_processor = None
+
+        #self.detection_model = None
+        #self.detection_processor = None
         self.detection_model = load_det_model()
         self.detection_processor = load_det_processor()
 
         # recognition init
+        self.recognition_model = None
+        self.recognition_processor = None
+    
+    def load_layout_models(self):
+        # detection & layout init
+        self.layout_model = load_layout_model()
+        self.layout_processor = load_layout_processor()
+        
+
+    def load_text_models(self):
+        # detection & layout init
         self.recognition_model = load_rec_model()
         self.recognition_processor = load_rec_processor()
+
+    def clear_all_models(self):
+        # detection & layout init
+        if(self.layout_model is not None):
+            del self.layout_model
+            self.layout_model = None
+
+        if(self.layout_processor is not None):
+            del self.layout_processor
+            self.layout_processor = None
+
+        
+        if(self.recognition_model is not None):
+            del self.recognition_model
+            self.recognition_model = None
+        if(self.recognition_processor is not None):
+            del self.recognition_processor
+            self.recognition_processor = None
+        torch.cuda.empty_cache()
 
     def run_layout_order_detection(self, image: Image)-> list:
         """
@@ -94,7 +128,8 @@ class OcrProcessor:
                 bbox=[505.0, 206.0, 961.0, 223.0],
                 )
         """
-        predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor)
+        predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
+                              detection_batch_size=16, recognition_batch_size=16)
         return predictions[0].text_lines
     
     @staticmethod

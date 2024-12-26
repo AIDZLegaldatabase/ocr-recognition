@@ -89,18 +89,44 @@ class JoradpFileParse:
     
     def parse_images_to_text_structure(self, ocr: OcrProcessor):
         usedImages = self.images[2:]
-        result_ocr = []
-        page = 0
+        layout_group_result = []
+        text_group_result = []
+        
+
+        ocr.load_layout_models()
+
         for img in usedImages:
             layouts = ocr.run_layout_order_detection(img)
+            layout_group_result.append(layouts)
+
+        ocr.clear_all_models()
+
+        ocr.load_text_models()
+
+        for img in usedImages:
             detected_textes = ocr.run_ocr_separate_text_recognition_fr(img)
+            text_group_result.append(detected_textes)
+            
+        ocr.clear_all_models()
+
+
+        result_ocr = []
+        page = 2
+
+        for index in range(0, len(text_group_result)):
+            layouts = layout_group_result[index]
+            detected_textes = text_group_result[index]
             # add image if debugging is needed
             imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
             # 10 is best margin through tests
             result = imageTest.match_making_texts_to_layouts(margin=10)
             result_ocr.append({ 'index': page, 'page': result})
             page += 1
+
+        
         return result_ocr
+    
+    
 
     @staticmethod
     def crop(image, top=0, left=0, right=0, bottom=0)-> Image:
