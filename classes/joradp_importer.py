@@ -1,6 +1,7 @@
 import os
 import requests
-
+import shutil
+from pathlib import Path
 
 class JoradpImporter:
 
@@ -66,3 +67,29 @@ class JoradpImporter:
         ]
         
         return pdf_files
+    
+
+    @staticmethod
+    def create_yearly_zip_files(base_directory, output_directory):
+        """
+        Creates a ZIP file for each year folder inside the base directory and saves it in the output directory.
+        EX:
+        base_directory = "./downloads"  # Directory containing year folders
+        output_directory = "./year_zip-files"  # Directory to save ZIP files
+        create_yearly_zip_files(base_directory, output_directory)
+        """
+        base_path = Path(base_directory)
+        output_path = Path(output_directory)
+
+        # Ensure the output directory exists
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Iterate over year directories in the base directory
+        for year_dir in base_path.iterdir():
+            if year_dir.is_dir():  # Check if it's a directory
+                year = year_dir.name
+                zip_file_path = output_path / f"{year}.zip"
+
+                # Create a ZIP file for the year directory
+                shutil.make_archive(zip_file_path.with_suffix(""), "zip", year_dir)
+                print(f"Created ZIP file: {zip_file_path}")
