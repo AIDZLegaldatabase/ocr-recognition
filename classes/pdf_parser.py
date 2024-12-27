@@ -145,7 +145,6 @@ class JoradpFileParse:
         layout_group_result = []
         text_group_result = []
         
-
         ocr.load_layout_models()
 
         for img in usedImages:
@@ -153,7 +152,6 @@ class JoradpFileParse:
             layout_group_result.append(layouts)
 
         ocr.clear_all_models()
-
         ocr.load_text_models()
 
         for img in usedImages:
@@ -161,8 +159,6 @@ class JoradpFileParse:
             text_group_result.append(detected_textes)
             
         ocr.clear_all_models()
-
-
         result_ocr = []
         page = 2
 
@@ -176,7 +172,33 @@ class JoradpFileParse:
             result_ocr.append({ 'index': page, 'page': result})
             page += 1
 
+        return result_ocr
+    
+
+    def parse_images_to_text_structure_optimized(self, ocr: OcrProcessor):
+        usedImages = self.images[2:]
+
+        ocr.load_layout_models()
+        layout_group_result = ocr.run_layout_order_detection_by_images_list(usedImages)
+        ocr.clear_all_models()
+        ocr.load_text_models()
+        text_group_result = ocr.run_ocr_separate_text_recognition_fr(usedImages)  
+        ocr.clear_all_models()
         
+        result_ocr = []
+        page = 2
+
+        for index in range(0, len(text_group_result)):
+            layouts = layout_group_result[index]
+            detected_textes = text_group_result[index]
+            # add image if debugging is needed
+            imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
+            # 10 is best margin through tests
+            result = imageTest.match_making_texts_to_layouts(margin=10)
+            result_ocr.append({ 'index': page, 'page': result})
+            page += 1
+        
+        # it 
         return result_ocr
     
     

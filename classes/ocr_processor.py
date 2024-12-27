@@ -1,4 +1,5 @@
 from PIL import Image
+from typing import List
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
 
@@ -88,32 +89,7 @@ class OcrProcessor:
         line_predictions = batch_text_detection([image], self.detection_model, self.detection_processor)
         layout_predictions = batch_layout_detection([image], self.layout_model, self.layout_processor, line_predictions)
         return layout_predictions[0].bboxes
-
-    def run_text_recognition_fr(self, image: Image, layout_data: list)-> list:
-        """
-        returns the list of TextLine(
-                polygon=[
-                    [505.0, 206.0],
-                    [961.0, 206.0],
-                    [961.0, 223.0],
-                    [505.0, 223.0],
-                ],
-                confidence=None,
-                text=" CARA CONSERVANCE OFF CALL CARRENT PACK TE CORES T X COURS AN A GRANT OF X THARRY OF DAY",
-                bbox=[505.0, 206.0, 961.0, 223.0],
-                )
-        """
-        #parse to int
-        layout_polygons = [[[int(coord[0]), int(coord[1])] for coord in layout_box.polygon] for layout_box in layout_data]
-
-        layout_recognition_results = run_recognition(
-            images=[image],               # Input image
-            langs=[['fr']],                   # Languages
-            rec_model=self.recognition_model,           # Recognition model
-            rec_processor=self.recognition_processor,   # Recognition processor
-            polygons=[layout_polygons])
-        return layout_recognition_results[0].text_lines
-        
+    
     def run_ocr_separate_text_recognition_fr(self, image: Image)-> list:
         """
         returns the list of TextLine(
@@ -131,6 +107,50 @@ class OcrProcessor:
         predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
                               detection_batch_size=16, recognition_batch_size=16)
         return predictions[0].text_lines
+    
+    def run_layout_order_detection_by_images_list(self, images: List[Image])-> list:
+        """
+        returns the list of LayoutBox(
+                polygon=[
+                    [206.3074891269207, 20.10954011231661],
+                    [275.1441529393196, 20.10954011231661],
+                    [273.2496216893196, 37.61239942163229],
+                    [204.4129578769207, 37.61239942163229],
+                ],
+                confidence=0.9843224883079529,
+                label="SectionHeader",
+                position=0,
+                },
+                bbox=[
+                    206.3074891269207,
+                    20.10954011231661,
+                    275.1441529393196,
+                    37.61239942163229,
+                ],
+            ),
+        """
+        line_predictions = batch_text_detection(images, self.detection_model, self.detection_processor)
+        layout_predictions = batch_layout_detection(images, self.layout_model, self.layout_processor, line_predictions)
+        return [l.bboxes for l in layout_predictions]
+        
+    def run_ocr_separate_text_recognition_fr_by_images_list(self, images: List[Image])-> list:
+        """
+        returns the list of TextLine(
+                polygon=[
+                    [505.0, 206.0],
+                    [961.0, 206.0],
+                    [961.0, 223.0],
+                    [505.0, 223.0],
+                ],
+                confidence=None,
+                text=" CARA CONSERVANCE OFF CALL CARRENT PACK TE CORES T X COURS AN A GRANT OF X THARRY OF DAY",
+                bbox=[505.0, 206.0, 961.0, 223.0],
+                )
+        """
+        language_fr = [['fr']] * len(images)
+        predictions = run_ocr(images, language_fr, self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
+                              detection_batch_size=16, recognition_batch_size=16)
+        return [l.text_lines for l in predictions]
     
     @staticmethod
     def get_orientation_adjustments(image, debug=False)->int:
