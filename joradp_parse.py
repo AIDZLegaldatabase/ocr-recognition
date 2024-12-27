@@ -22,10 +22,10 @@ def run_ocr_by_year(year: int):
     for file_path in target_pdf_files:
         parserImages = JoradpFileParse(file_path)
         ocr = OcrProcessor()
-        parserImages.get_images()
+        parserImages.get_images_with_pymupdf()
         parserImages.resize_image_to_fit_ocr()
         parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
-        parserImages.adjust_all_images_rotations()
+        parserImages.adjust_all_images_rotations_parallel()
         data = parserImages.parse_images_to_text_structure(ocr)
 
         #saving

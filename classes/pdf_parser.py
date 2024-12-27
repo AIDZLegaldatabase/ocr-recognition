@@ -2,7 +2,8 @@ from classes.image_builder import ImageBuilder
 from classes.ocr_processor import OcrProcessor
 from pdf2image import convert_from_path
 from PIL import Image
-import fitz  # PyMuPDF
+import fitz 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 class JoradpFileParse:
     def __init__(self, pdf_path: str):
@@ -116,6 +117,28 @@ class JoradpFileParse:
             resized_images.append(self.rotate_image_degrees_auto(img, rotation))
 
         self.images =  resized_images
+    
+    @staticmethod
+    def detect_one_image_rotation(image):
+        rotation = OcrProcessor.get_orientation_adjustments(image)
+        return JoradpFileParse.rotate_image_degrees_auto(image, rotation)
+    
+    def adjust_all_images_rotations_parallel(self, max_workers=None):
+        """
+        Adjust the orientation of all images in parallel using ProcessPoolExecutor.
+        This maintains the same functionality as the sequential version but processes
+        images concurrently for better performance.
+        
+        Args:
+            ocr: OcrProcessor instance
+            max_workers: Number of worker processes to use (defaults to number of CPU cores)
+        """
+        # Create a partial function with the ocr parameter fixed
+        
+        # Use ProcessPoolExecutor for parallel processing
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Process all images in parallel while maintaining order
+            self.images = list(executor.map(JoradpFileParse.detect_one_image_rotation, self.images))
     
     def parse_images_to_text_structure(self, ocr: OcrProcessor):
         usedImages = self.images[2:]
