@@ -25,7 +25,7 @@ def run_ocr_by_year(year: int):
         parserImages.get_images()
         parserImages.resize_image_to_fit_ocr()
         parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
-        parserImages.adjust_all_images_rotations(ocr)
+        parserImages.adjust_all_images_rotations()
         data = parserImages.parse_images_to_text_structure(ocr)
 
         #saving

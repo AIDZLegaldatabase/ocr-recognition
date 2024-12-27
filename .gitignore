@@ -3,3 +3,4 @@ downloads
 result_json
 year_files_raw
 year_zip-files
+./classes/__pycache__

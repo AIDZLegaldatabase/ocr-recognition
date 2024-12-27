@@ -2,6 +2,7 @@ from classes.image_builder import ImageBuilder
 from classes.ocr_processor import OcrProcessor
 from pdf2image import convert_from_path
 from PIL import Image
+import fitz  # PyMuPDF
 
 class JoradpFileParse:
     def __init__(self, pdf_path: str):
@@ -24,8 +25,37 @@ class JoradpFileParse:
         try:
             # Convert the PDF to images
             self.images = convert_from_path(self.pdf_path, dpi)
+            return self.images
         except Exception as e:
             print(f"An error occurred while converting PDF to images: {e}")
+            return []
+    
+    def get_images_with_pymupdf(self, dpi: int = 300) -> list:
+        """
+        Convert the PDF into a list of images using PyMuPDF.
+
+        Args:
+            dpi (int): DPI for image conversion.
+
+        Returns:
+            list: List of PIL.Image objects.
+        """
+        try:
+            doc = fitz.open(self.pdf_path)
+            images = []
+            zoom = dpi / 72  # PyMuPDF works with 72 DPI base
+            mat = fitz.Matrix(zoom, zoom)
+
+            for page_number in range(len(doc)):
+                page = doc[page_number]
+                pix = page.get_pixmap(matrix=mat)
+                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                images.append(img)
+
+            self.images = images
+            return self.images
+        except Exception as e:
+            print(f"An error occurred while converting PDF to images using PyMuPDF: {e}")
             return []
 
     def resize_image_to_fit_ocr(self) -> list:
@@ -66,7 +96,7 @@ class JoradpFileParse:
 
         self.images =  resized_images
 
-    def adjust_all_images_rotations(self, ocr: OcrProcessor):
+    def adjust_all_images_rotations(self):
         """
         Crop the specified number of pixels from the imported images.
 
@@ -82,7 +112,7 @@ class JoradpFileParse:
         """
         resized_images = []
         for img in self.images:
-            rotation = ocr.get_orientation_adjustments(img)
+            rotation = OcrProcessor.get_orientation_adjustments(img)
             resized_images.append(self.rotate_image_degrees_auto(img, rotation))
 
         self.images =  resized_images
