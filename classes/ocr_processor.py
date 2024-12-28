@@ -1,5 +1,4 @@
 from PIL import Image
-from typing import List
 from surya.detection import batch_text_detection
 from surya.layout import batch_layout_detection
 
@@ -86,11 +85,11 @@ class OcrProcessor:
                 ],
             ),
         """
-        line_predictions = batch_text_detection([image], self.detection_model, self.detection_processor)
-        layout_predictions = batch_layout_detection([image], self.layout_model, self.layout_processor, line_predictions)
+
+        layout_predictions = batch_layout_detection([image], self.layout_model, self.layout_processor)
         return layout_predictions[0].bboxes
     
-    def run_ocr_separate_text_recognition_fr(self, image: Image)-> list:
+    def run_ocr_separate_text_recognition_fr(self, image: Image.Image)-> list:
         """
         returns the list of TextLine(
                 polygon=[
@@ -108,7 +107,7 @@ class OcrProcessor:
                               detection_batch_size=16, recognition_batch_size=16)
         return predictions[0].text_lines
     
-    def run_layout_order_detection_by_images_list(self, images: List[Image])-> list:
+    def run_layout_order_detection_by_images_list(self, images: list)-> list:
         """
         returns the list of LayoutBox(
                 polygon=[
@@ -133,7 +132,7 @@ class OcrProcessor:
         layout_predictions = batch_layout_detection(images, self.layout_model, self.layout_processor, line_predictions)
         return [l.bboxes for l in layout_predictions]
         
-    def run_ocr_separate_text_recognition_fr_by_images_list(self, images: List[Image])-> list:
+    def run_ocr_separate_text_recognition_fr_by_images_list(self, images: list)-> list:
         """
         returns the list of TextLine(
                 polygon=[

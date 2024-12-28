@@ -17,21 +17,21 @@ def run_processing(use_parallel=False):
     # Choose the appropriate rotation method
     if use_parallel:
         parserImages = JoradpFileParse("./data_test/F2024080.pdf")
-        ocr = OcrProcessor()
+        # ocr = OcrProcessor()
         parserImages.get_images_with_pymupdf()
         parserImages.resize_image_to_fit_ocr()
         parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
         parserImages.adjust_all_images_rotations_parallel()
-        parserImages.parse_images_to_text_structure(ocr)
+        # parserImages.parse_images_to_text_structure(ocr)
         
     else:
         parserImages = JoradpFileParse("./data_test/F2024080.pdf")
-        ocr = OcrProcessor()
-        parserImages.get_images()
+        # ocr = OcrProcessor()
+        parserImages.get_images_with_pymupdf()
         parserImages.resize_image_to_fit_ocr()
         parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
         parserImages.adjust_all_images_rotations()
-        parserImages.parse_images_to_text_structure_optimized(ocr)
+        # parserImages.parse_images_to_text_structure_optimized(ocr)
     
     # Calculate and return the elapsed time
     elapsed_time = time.time() - start_time
