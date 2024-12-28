@@ -3,7 +3,7 @@ from classes.ocr_processor import OcrProcessor
 from pdf2image import convert_from_path
 from PIL import Image
 import fitz 
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class JoradpFileParse:
     def __init__(self, pdf_path: str):
@@ -136,7 +136,7 @@ class JoradpFileParse:
         # Create a partial function with the ocr parameter fixed
         
         # Use ProcessPoolExecutor for parallel processing
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Process all images in parallel while maintaining order
             self.images = list(executor.map(JoradpFileParse.detect_one_image_rotation, self.images))
     

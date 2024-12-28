@@ -148,7 +148,7 @@ class OcrProcessor:
         """
         language_fr = [['fr']] * len(images)
         predictions = run_ocr(images, language_fr, self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
-                              detection_batch_size=16, recognition_batch_size=16)
+                              detection_batch_size=32, recognition_batch_size=32)
         return [l.text_lines for l in predictions]
     
     @staticmethod
