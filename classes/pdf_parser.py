@@ -1,6 +1,5 @@
 from classes.image_builder import ImageBuilder
 from classes.ocr_processor import OcrProcessor
-from pdf2image import convert_from_path
 from PIL import Image
 import fitz 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,24 +11,6 @@ class JoradpFileParse:
         """
         self.pdf_path = pdf_path
         self.images = []
-
-    def get_images(self, dpi: int = 300) -> list:
-        """
-        Convert the PDF into a list of images (one per page).
-
-        Args:
-            dpi (int): DPI for image conversion.
-
-        Returns:
-            list: List of PIL.Image objects.
-        """
-        try:
-            # Convert the PDF to images
-            self.images = convert_from_path(self.pdf_path, dpi)
-            return self.images
-        except Exception as e:
-            print(f"An error occurred while converting PDF to images: {e}")
-            return []
     
     def get_images_with_pymupdf(self, dpi: int = 300) -> list:
         """

@@ -6,7 +6,7 @@ from classes.joradp_importer import JoradpImporter
 
 parserImages = JoradpFileParse("./data_test/F2024080.pdf")
 ocr = OcrProcessor()
-parserImages.get_images()
+parserImages.get_images_with_pymupdf()
 parserImages.resize_image_to_fit_ocr()
 parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
 parserImages.adjust_all_images_rotations()

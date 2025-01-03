@@ -1,7 +1,6 @@
 surya-ocr
 pypdf2
 notebook
-pdf2image
 pymupdf
 Pillow
 pytesseract
