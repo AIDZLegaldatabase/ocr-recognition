@@ -13,7 +13,7 @@ class JoradpImporter:
             year (int): The year to download files for.
             save_directory (str): Directory to save the downloaded files.
         """
-        base_url = "https://www.joradp.dz/FTP/jo-francais/"
+        base_url = "https://www.joradp.dz/FTP/jo-francais"
         save_directory += str(year)
         os.makedirs(save_directory, exist_ok=True)  # Create directory if it doesn't exist
 
@@ -21,11 +21,11 @@ class JoradpImporter:
         while True:
             # Format the file number as a three-digit string
             file_number = f"{number:03}"
-            url = f"{base_url}/F{year}{file_number}.pdf"
+            url = f"{base_url}/{year}/F{year}{file_number}.pdf"
             save_path = os.path.join(save_directory, f"F{year}{file_number}.pdf")
 
             try:
-                #print(f"Attempting to download: {url}")
+                print(f"Attempting to download: {url}")
                 response = requests.get(url, stream=True)
 
                 # Check for 404 status to stop the loop
