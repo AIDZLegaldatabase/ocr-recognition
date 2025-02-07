@@ -122,7 +122,7 @@ class JoradpFileParse:
             self.images = list(executor.map(JoradpFileParse.detect_one_image_rotation, self.images))
     
     def parse_images_to_text_structure(self, ocr: OcrProcessor):
-        usedImages = self.images[2:]
+        usedImages = self.images[1:]
         layout_group_result = []
         text_group_result = []
         
@@ -141,7 +141,7 @@ class JoradpFileParse:
             
         ocr.clear_all_models()
         result_ocr = []
-        page = 2
+        page = 1
 
         for index in range(0, len(text_group_result)):
             layouts = layout_group_result[index]
@@ -157,7 +157,7 @@ class JoradpFileParse:
     
 
     def parse_images_to_text_structure_optimized(self, ocr: OcrProcessor):
-        usedImages = self.images[2:]
+        usedImages = self.images[1:]
 
         ocr.load_layout_models()
         layout_group_result = ocr.run_layout_order_detection_by_images_list(usedImages)
@@ -167,7 +167,7 @@ class JoradpFileParse:
         ocr.clear_all_models()
         
         result_ocr = []
-        page = 2
+        page = 1
 
         for index in range(0, len(text_group_result)):
             layouts = layout_group_result[index]
