@@ -236,15 +236,13 @@ class ImageBuilder:
                 key=lambda item: (item["start_point"][1], item["start_point"][0])
             )
 
-            # Merge texts in order
-            merged_text = " ".join([text["text"] for text in sorted_texts])
 
             # Append the result
             if sorted_texts:  # Only add if there are texts within the layout box
                 matched_results.append({
                     "bbox_text": [text["bbox"] for text in sorted_texts],
                     "bbox_layout": layout_bbox,
-                    "text": merged_text,
+                    "text": [text["text"] for text in sorted_texts],
                     "label": layout.label,
                     "position": layout.position,
                 })

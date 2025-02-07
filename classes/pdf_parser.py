@@ -50,7 +50,7 @@ class JoradpFileParse:
         for img in self.images:
             width, height = img.size
             aspect_ratio = width / height
-            new_height = 1600
+            new_height = 1500
             new_width = int(aspect_ratio * new_height)
             resized_image = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
             resized_images.append(resized_image)
