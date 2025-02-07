@@ -108,6 +108,8 @@ def run_ocr_by_year(year: int):
             right=crop_config['right'], 
             bottom=crop_config['bottom']
         )
+        print(" Current file " + current_file_base)
+        print(crop_config)
         parserImages.adjust_all_images_rotations_parallel()
         data = parserImages.parse_images_to_text_structure(ocr)
 
