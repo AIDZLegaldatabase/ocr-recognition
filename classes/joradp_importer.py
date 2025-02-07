@@ -26,7 +26,7 @@ class JoradpImporter:
 
             try:
                 print(f"Attempting to download: {url}")
-                response = requests.get(url, stream=True)
+                response = requests.get(url, stream=True, verify=False)
 
                 # Check for 404 status to stop the loop
                 if response.status_code == 404:
