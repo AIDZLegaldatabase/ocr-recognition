@@ -118,6 +118,6 @@ def run_ocr_by_year(year: int):
             convert_file.write(json.dumps(data))
 
 
-for i in range(1962, 1992):
+for i in range(1975, 1992):
     run_ocr_by_year(i)
     print(i)
