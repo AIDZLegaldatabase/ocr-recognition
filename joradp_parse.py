@@ -12,36 +12,73 @@ class CropConfigurationManager:
     """Manages crop configurations for different year intervals"""
     
     _CROP_CONFIGURATIONS = [
+        # checked
         {
             'start': 'F1962000',
-            'end': 'F1980004',
+            'end': 'F1997199',
             'crop_params': {
-                'top': 70, 
+                'top': 85, 
                 'left': 0, 
                 'right': 0, 
-                'bottom': 30
+                'bottom': 15
             }
         },
+        #checked
         {
-            'start': 'F1980005',
-            'end': 'F1995004',
+            'start': 'F1998000',
+            'end': 'F2001199',
             'crop_params': {
-                'top': 80, 
-                'left': 10, 
-                'right': 10, 
-                'bottom': 10
+                'top': 100, 
+                'left': 40, 
+                'right': 30, 
+                'bottom': 40
             }
         },
+        # checked
         {
-            'start': 'F1995005',
-            'end': 'F2005004',
+            'start': 'F2002000',
+            'end': 'F2005069',
             'crop_params': {
-                'top': 90, 
-                'left': 20, 
-                'right': 20, 
+                'top': 120, 
+                'left': 70, 
+                'right': 70, 
                 'bottom': 20
             }
         },
+        # checked
+        {
+            'start': 'F2005070',
+            'end': 'F2005078',
+            'crop_params': {
+                'top': 180, 
+                'left': 130, 
+                'right': 130, 
+                'bottom': 150
+            }
+        },
+        # checked
+        {
+            'start': 'F2005079',
+            'end': 'F2018003',
+            'crop_params': {
+                'top': 140, 
+                'left': 45, 
+                'right': 100, 
+                'bottom': 60
+            }
+        },
+        # checked
+        {
+            'start': 'F2018004',
+            'end': 'F2025199',
+            'crop_params': {
+                'top': 110, 
+                'left': 70, 
+                'right': 70, 
+                'bottom': 90
+            }
+        },
+        
         # Add more intervals as needed
     ]
     
@@ -118,6 +155,6 @@ def run_ocr_by_year(year: int):
             convert_file.write(json.dumps(data))
 
 
-for i in range(1975, 1992):
+for i in range(1990, 2026):
     run_ocr_by_year(i)
     print(i)
