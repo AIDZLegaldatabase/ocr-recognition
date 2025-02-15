@@ -1,4 +1,3 @@
-
 import os
 import json
 from classes.pdf_parser import JoradpFileParse
@@ -114,23 +113,26 @@ def get_latest_processed_file(year):
     base_names = [os.path.splitext(os.path.basename(f))[0] for f in json_files]
     return max(base_names) if base_names else None
 
-def run_ocr_by_year(year: int):
-
-
+def run_ocr_by_year(year: int, min_filename=None):
     target_pdf_files = get_joradp_files_list(year)
     os.makedirs("./result_json/"+ str(year), exist_ok=True)  # Create a folder for JSON files
 
     latest_processed = get_latest_processed_file(year)
 
-    for file_path in target_pdf_files:
+    for file_path in sorted(target_pdf_files):
         #saving
         new_result_name = os.path.splitext(os.path.basename(file_path))[0] + ".json"
 
         # check the filename current is bigger than what has been computed
         current_file_base = os.path.splitext(os.path.basename(file_path))[0]
+        
+        # Skip if file is before minimum filename
+        if min_filename and current_file_base < min_filename:
+            continue
+            
+        # Skip if already processed
         if latest_processed and current_file_base <= latest_processed:
             continue
-
 
         # selecting the right margin by year and version
         parserImages = JoradpFileParse(file_path)
@@ -154,7 +156,12 @@ def run_ocr_by_year(year: int):
         with open('./result_json/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
             convert_file.write(json.dumps(data))
 
+# First process 1974 starting from F1974040
+run_ocr_by_year(1974, min_filename='F1974035')
+print("Completed processing for 1974")
+run_ocr_by_year(1991, min_filename='F1990025')
 
-for i in range(1990, 2026):
-    run_ocr_by_year(i)
-    print(i)
+# Then process 1990-2025, starting from F1990036 for 1990
+for year in range(1992, 2026):
+    run_ocr_by_year(year)
+    print(f"Completed processing for {year}")
