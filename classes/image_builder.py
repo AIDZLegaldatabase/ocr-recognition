@@ -194,7 +194,7 @@ class ImageBuilder:
 
         return annotated_image
 
-    def match_making_texts_to_layouts(self, margin=5):
+    def match_making_texts_to_layouts(self, margin=5)-> dict[str, list]:
         """
         Match and merge text boxes into layout boxes based on adjusted bounding boxes and ordering.
 
@@ -202,9 +202,12 @@ class ImageBuilder:
             margin (int, optional): Margin to adjust bounding boxes for matching. Defaults to 5.
 
         Returns:
-            list: A list of dictionaries with merged text and layout information.
+            dict: A dictionary containing:
+                - 'matched_results': List of dictionaries with merged text and layout information
+                - 'unmatched_texts': List of text boxes that don't belong to any layout
         """
         matched_results = []
+        matched_text_indices = set()  # Track which texts have been matched
 
         # Iterate over layout data
         for layout in self.layout_data:
@@ -218,7 +221,7 @@ class ImageBuilder:
 
             # Collect all text boxes within the layout bbox
             texts_in_layout = []
-            for text in self.text_data:
+            for i, text in enumerate(self.text_data):
                 text_bbox = text.bbox
                 if (
                     layout_bbox[0] <= text_bbox[0] and layout_bbox[1] <= text_bbox[1] and
@@ -229,13 +232,13 @@ class ImageBuilder:
                         "bbox": text_bbox,
                         "start_point": text_bbox[:2],  # First point (x_min, y_min)
                     })
+                    matched_text_indices.add(i)  # Mark this text as matched
 
             # Sort text boxes by y-coordinate, then x-coordinate
             sorted_texts = sorted(
                 texts_in_layout,
                 key=lambda item: (item["start_point"][1], item["start_point"][0])
             )
-
 
             # Append the result
             if sorted_texts:  # Only add if there are texts within the layout box
@@ -247,4 +250,23 @@ class ImageBuilder:
                     "position": layout.position,
                 })
 
-        return matched_results
+        # Collect unmatched texts
+        unmatched_texts = []
+        for i, text in enumerate(self.text_data):
+            if i not in matched_text_indices:
+                unmatched_texts.append({
+                    "text": text.text,
+                    "bbox": text.bbox,
+                    "start_point": text.bbox[:2],
+                })
+
+        # Sort unmatched texts by y-coordinate, then x-coordinate for consistency
+        unmatched_texts = sorted(
+            unmatched_texts,
+            key=lambda item: (item["start_point"][1], item["start_point"][0])
+        )
+
+        return {
+            "result": matched_results,
+            "rest": unmatched_texts
+        }

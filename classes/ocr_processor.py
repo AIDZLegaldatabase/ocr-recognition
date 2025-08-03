@@ -1,17 +1,10 @@
 from PIL import Image
-from surya.detection import batch_text_detection
-from surya.layout import batch_layout_detection
+from surya.detection import DetectionPredictor
+from surya.layout import LayoutPredictor
 
-from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
-from surya.model.layout.model import load_model as load_layout_model
-from surya.model.layout.processor import load_processor as load_layout_processor
+from surya.recognition import RecognitionPredictor
 
 
-from surya.model.recognition.model import load_model as load_rec_model
-from surya.model.recognition.processor import load_processor as load_rec_processor
-
-from surya.ocr import run_recognition
-from surya.ocr import run_ocr
 
 from pytesseract import image_to_osd
 import torch
@@ -22,46 +15,30 @@ class OcrProcessor:
         Initialize with Surya models and processors for detection and layout.
         """
         # detection & layout init
-        self.layout_model = None
-        self.layout_processor = None
-
-        #self.detection_model = None
-        #self.detection_processor = None
-        self.detection_model = load_det_model()
-        self.detection_processor = load_det_processor()
-
+        self.detection_predictor = DetectionPredictor()
+        # layout manager
+        self.layout_manager = None
         # recognition init
-        self.recognition_model = None
-        self.recognition_processor = None
+        self.recognition_manager = None
     
     def load_layout_models(self):
-        # detection & layout init
-        self.layout_model = load_layout_model()
-        self.layout_processor = load_layout_processor()
+        self.layout_manager = LayoutPredictor()
         
 
     def load_text_models(self):
-        # detection & layout init
-        self.recognition_model = load_rec_model()
-        self.recognition_processor = load_rec_processor()
+        self.recognition_manager = RecognitionPredictor()
+        
 
     def clear_all_models(self):
         # detection & layout init
-        if(self.layout_model is not None):
-            del self.layout_model
-            self.layout_model = None
+        if(self.layout_manager is not None):
+            del self.layout_manager
+            self.layout_manager = None
 
-        if(self.layout_processor is not None):
-            del self.layout_processor
-            self.layout_processor = None
+        if(self.recognition_manager is not None):
+            del self.recognition_manager
+            self.recognition_manager = None
 
-        
-        if(self.recognition_model is not None):
-            del self.recognition_model
-            self.recognition_model = None
-        if(self.recognition_processor is not None):
-            del self.recognition_processor
-            self.recognition_processor = None
         torch.cuda.empty_cache()
 
     def run_layout_order_detection(self, image: Image)-> list:
@@ -86,7 +63,7 @@ class OcrProcessor:
             ),
         """
 
-        layout_predictions = batch_layout_detection([image], self.layout_model, self.layout_processor)
+        layout_predictions = self.layout_manager([image])
         return layout_predictions[0].bboxes
     
     def run_ocr_separate_text_recognition_fr(self, image: Image.Image)-> list:
@@ -103,8 +80,9 @@ class OcrProcessor:
                 bbox=[505.0, 206.0, 961.0, 223.0],
                 )
         """
-        predictions = run_ocr([image], [['fr']], self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
-                              detection_batch_size=16, recognition_batch_size=16)
+
+        predictions = self.recognition_manager([image], det_predictor=self.detection_predictor)
+        
         return predictions[0].text_lines
     
     def run_layout_order_detection_by_images_list(self, images: list)-> list:
@@ -128,8 +106,7 @@ class OcrProcessor:
                 ],
             ),
         """
-        line_predictions = batch_text_detection(images, self.detection_model, self.detection_processor)
-        layout_predictions = batch_layout_detection(images, self.layout_model, self.layout_processor, line_predictions)
+        layout_predictions = layout_predictions = self.layout_manager(images)
         return [l.bboxes for l in layout_predictions]
         
     def run_ocr_separate_text_recognition_fr_by_images_list(self, images: list)-> list:
@@ -146,9 +123,8 @@ class OcrProcessor:
                 bbox=[505.0, 206.0, 961.0, 223.0],
                 )
         """
-        language_fr = [['fr']] * len(images)
-        predictions = run_ocr(images, language_fr, self.detection_model, self.detection_processor, self.recognition_model, self.recognition_processor,
-                              detection_batch_size=32, recognition_batch_size=32)
+
+        predictions = self.recognition_manager(images, det_predictor=self.detection_predictor)
         return [l.text_lines for l in predictions]
     
     @staticmethod

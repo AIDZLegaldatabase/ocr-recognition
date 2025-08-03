@@ -150,7 +150,7 @@ class JoradpFileParse:
             imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
             # 10 is best margin through tests
             result = imageTest.match_making_texts_to_layouts(margin=10)
-            result_ocr.append({ 'index': page, 'page': result})
+            result_ocr.append({ 'index': page, 'page': result['result'], 'rest': result['rest']})
             page += 1
 
         return result_ocr
@@ -176,7 +176,7 @@ class JoradpFileParse:
             imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
             # 10 is best margin through tests
             result = imageTest.match_making_texts_to_layouts(margin=10)
-            result_ocr.append({ 'index': page, 'page': result})
+            result_ocr.append({ 'index': page, 'page': result['result'], 'rest': result['rest']})
             page += 1
         
         # it 
