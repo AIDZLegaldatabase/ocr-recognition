@@ -132,7 +132,7 @@ def get_joradp_files_list(year: int):
 
 def get_latest_processed_file(year):
     """Get the latest processed file name for a given year"""
-    year_path = f"./result_json/{year}"
+    year_path = f"./result_json_v2/{year}"
     if not os.path.exists(year_path):
         return None
     
@@ -203,54 +203,11 @@ def run_ocr_by_year_selective(year: int, selective_config: dict, min_filename=No
         # Use selective processing with the specified page indices
         data = parserImages.parse_images_to_text_structure_selective(ocr, page_indices)
 
-        with open('./result_json/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
+        with open('./result_json_v2/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
             convert_file.write(json.dumps(data))
         
         print(f"Completed processing {current_file_base}")
 
-def run_ocr_by_year(year: int, min_filename=None):
-    """Original function for processing all pages - kept for backward compatibility"""
-    target_pdf_files = get_joradp_files_list(year)
-    os.makedirs("./result_json/"+ str(year), exist_ok=True)  # Create a folder for JSON files
-
-    latest_processed = get_latest_processed_file(year)
-
-    for file_path in sorted(target_pdf_files):
-        #saving
-        new_result_name = os.path.splitext(os.path.basename(file_path))[0] + ".json"
-
-        # check the filename current is bigger than what has been computed
-        current_file_base = os.path.splitext(os.path.basename(file_path))[0]
-        
-        # Skip if file is before minimum filename
-        if min_filename and current_file_base < min_filename:
-            continue
-            
-        # Skip if already processed
-        if latest_processed and current_file_base <= latest_processed:
-            continue
-
-        # selecting the right margin by year and version
-        parserImages = JoradpFileParse(file_path)
-        ocr = OcrProcessor()
-        parserImages.get_images_with_pymupdf()
-        parserImages.resize_image_to_fit_ocr()
-
-        crop_config = CropConfigurationManager.get_crop_configuration(current_file_base)
-        parserImages.crop_all_images(
-            top=crop_config['top'], 
-            left=crop_config['left'], 
-            right=crop_config['right'], 
-            bottom=crop_config['bottom']
-        )
-        print(" Current file " + current_file_base)
-        print(crop_config)
-        parserImages.adjust_all_images_rotations_parallel()
-        data = parserImages.parse_images_to_text_structure_selective(ocr, [])
-
-        
-        with open('./result_json/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
-            convert_file.write(json.dumps(data))
 
 # Load the selective processing configuration from CSV
 selective_config = load_selective_processing_config('report_wrong.csv')
