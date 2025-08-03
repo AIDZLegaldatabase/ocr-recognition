@@ -182,7 +182,74 @@ class JoradpFileParse:
         # it 
         return result_ocr
     
-    
+    def parse_images_to_text_structure_selective(self, ocr: OcrProcessor, page_indices: list):
+        """
+        Parse only specific pages to text structure using OCR.
+        Pages not in the indices list will have empty results.
+
+        Args:
+            ocr (OcrProcessor): The OCR processor instance.
+            page_indices (list): List of page indices to process (0-based, excluding first page).
+                                For example, [0, 2, 4] will process pages 2, 4, and 6 of the PDF
+                                (since we skip the first page).
+
+        Returns:
+            list: List of OCR results with empty results for ignored pages.
+        """
+        total_pages = len(self.images)
+        
+        if (len(page_indices) == 0):
+            return []
+        
+        # Validate page indices
+        valid_indices = [i for i in page_indices if 0 <= i < total_pages]
+        if len(valid_indices) != len(page_indices):
+            invalid_indices = [i for i in page_indices if i < 0 or i >= total_pages]
+            print(f"Warning: Invalid page indices ignored: {invalid_indices}")
+        
+        # Create lists to store results for all pages
+        layout_group_result = [] 
+        text_group_result = [] 
+        
+        # Process only selected pages
+        if valid_indices:
+            # Get images for selected pages only
+            selected_images = [self.images[i] for i in valid_indices]
+            
+            # Process layouts for selected pages
+            ocr.load_layout_models()
+            selected_layouts = ocr.run_layout_order_detection_by_images_list(selected_images)
+            ocr.clear_all_models()
+            
+            # Process text recognition for selected pages
+            ocr.load_text_models()
+            selected_texts = ocr.run_ocr_separate_text_recognition_fr(selected_images)
+            ocr.clear_all_models()
+            
+            # Map results back to their original positions
+            for idx, page_idx in enumerate(valid_indices):
+                layout_group_result[page_idx] = selected_layouts[idx]
+                text_group_result[page_idx] = selected_texts[idx]
+        
+        # Build final results
+        result_ocr = []
+        
+        for index in range(valid_indices):
+            page_index = valid_indices[index]
+            
+            layouts = layout_group_result[index]
+            detected_textes = text_group_result[index]
+            
+            imageTest = ImageBuilder(image=None, layout_data=layouts, text_data=detected_textes)
+            result = imageTest.match_making_texts_to_layouts(margin=10)
+            result_ocr.append({
+                'index': page_index, 
+                'page': result['result'], 
+                'rest': result['rest']
+            })
+            
+        
+        return result_ocr
 
     @staticmethod
     def crop(image, top=0, left=0, right=0, bottom=0)-> Image:
