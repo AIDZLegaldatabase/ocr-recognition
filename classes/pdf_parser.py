@@ -216,20 +216,24 @@ class JoradpFileParse:
             # Get images for selected pages only
             selected_images = [self.images[i] for i in valid_indices]
             
-            # Process layouts for selected pages
+            layout_group_result = []
+            text_group_result = []
+            
             ocr.load_layout_models()
-            selected_layouts = ocr.run_layout_order_detection_by_images_list(selected_images)
+
+            for img in selected_images:
+                layouts = ocr.run_layout_order_detection(img)
+                layout_group_result.append(layouts)
+
             ocr.clear_all_models()
-            
-            # Process text recognition for selected pages
             ocr.load_text_models()
-            selected_texts = ocr.run_ocr_separate_text_recognition_fr(selected_images)
+
+            for img in selected_images:
+                detected_textes = ocr.run_ocr_separate_text_recognition_fr(img)
+                text_group_result.append(detected_textes)
+                
             ocr.clear_all_models()
             
-            # Map results back to their original positions
-            for idx, page_idx in enumerate(valid_indices):
-                layout_group_result[page_idx] = selected_layouts[idx]
-                text_group_result[page_idx] = selected_texts[idx]
         
         # Build final results
         result_ocr = []
