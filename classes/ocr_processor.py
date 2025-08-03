@@ -3,6 +3,7 @@ from surya.detection import DetectionPredictor
 from surya.layout import LayoutPredictor
 
 from surya.recognition import RecognitionPredictor
+from typing import List
 
 
 
@@ -66,7 +67,7 @@ class OcrProcessor:
         layout_predictions = self.layout_manager([image])
         return layout_predictions[0].bboxes
     
-    def run_ocr_separate_text_recognition_fr(self, image: Image.Image)-> list:
+    def run_ocr_separate_text_recognition_fr(self, image: RecognitionPredictor)-> list:
         """
         returns the list of TextLine(
                 polygon=[
@@ -85,7 +86,7 @@ class OcrProcessor:
         
         return predictions[0].text_lines
     
-    def run_layout_order_detection_by_images_list(self, images: list)-> list:
+    def run_layout_order_detection_by_images_list(self, images: List[Image.Image])-> list:
         """
         returns the list of LayoutBox(
                 polygon=[
@@ -109,7 +110,7 @@ class OcrProcessor:
         layout_predictions = layout_predictions = self.layout_manager(images)
         return [l.bboxes for l in layout_predictions]
         
-    def run_ocr_separate_text_recognition_fr_by_images_list(self, images: list)-> list:
+    def run_ocr_separate_text_recognition_fr_by_images_list(self, images: List[Image.Image])-> list:
         """
         returns the list of TextLine(
                 polygon=[

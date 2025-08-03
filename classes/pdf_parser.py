@@ -221,16 +221,13 @@ class JoradpFileParse:
             
             ocr.load_layout_models()
 
-            for img in selected_images:
-                layouts = ocr.run_layout_order_detection(img)
-                layout_group_result.append(layouts)
+            
+            layout_group_result = ocr.run_layout_order_detection_by_images_list(selected_images)
 
             ocr.clear_all_models()
             ocr.load_text_models()
 
-            for img in selected_images:
-                detected_textes = ocr.run_ocr_separate_text_recognition_fr(img)
-                text_group_result.append(detected_textes)
+            text_group_result = ocr.run_ocr_separate_text_recognition_fr_by_images_list(selected_images)
                 
             ocr.clear_all_models()
             
