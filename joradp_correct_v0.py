@@ -154,6 +154,10 @@ def run_ocr_by_year_selective(year: int, selective_config: dict, min_filename=No
         selective_config (dict): Dictionary mapping document names to lists of page indices
         min_filename (str): Minimum filename to start processing from
     """
+    ocr = OcrProcessor()
+    ocr.load_layout_models()
+    ocr.load_text_models()
+            
     target_pdf_files = get_joradp_files_list(year)
     os.makedirs("./result_json_v2/"+ str(year), exist_ok=True)  # Create a folder for JSON files
 
@@ -186,7 +190,7 @@ def run_ocr_by_year_selective(year: int, selective_config: dict, min_filename=No
 
         # selecting the right margin by year and version
         parserImages = JoradpFileParse(file_path)
-        ocr = OcrProcessor()
+
         parserImages.get_images_with_pymupdf()
         parserImages.resize_image_to_fit_ocr()
 
@@ -201,12 +205,14 @@ def run_ocr_by_year_selective(year: int, selective_config: dict, min_filename=No
         parserImages.adjust_all_images_rotations_parallel()
         
         # Use selective processing with the specified page indices
-        data = parserImages.parse_images_to_text_structure_selective(ocr, page_indices)
+        data = parserImages.parse_images_to_text_structure_selective_heavy(ocr, page_indices)
 
         with open('./result_json_v2/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
             convert_file.write(json.dumps(data))
         
         print(f"Completed processing {current_file_base}")
+    
+    ocr.clear_all_models()
 
 
 # Load the selective processing configuration from CSV
