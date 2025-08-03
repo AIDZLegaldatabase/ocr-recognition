@@ -238,7 +238,7 @@ class JoradpFileParse:
         # Build final results
         result_ocr = []
         
-        for index in range(valid_indices):
+        for index in range(len(valid_indices)):
             page_index = valid_indices[index]
             
             layouts = layout_group_result[index]
