@@ -4,3 +4,11 @@ notebook
 pymupdf
 Pillow
 pytesseract
+transformers
+easyocr
+torchvision
+matplotlib
+huggingface_hub
+numpy
+easyocr
+tqdm

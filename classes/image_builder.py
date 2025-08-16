@@ -1,4 +1,5 @@
 from PIL import Image, ImageDraw, ImageFont
+from typing import List, Union
 
 class ImageBuilder:
     def __init__(self, image=None, layout_data=None, text_data=None):
@@ -270,3 +271,45 @@ class ImageBuilder:
             "result": matched_results,
             "rest": unmatched_texts
         }
+    
+    @staticmethod
+    def draw_boxes_on_image(image: Image.Image, boxes: List[List[Union[int, float]]], outline: str = "red", width: int = 3) -> Image.Image:
+        # Work on a copy so the original image is not modified
+        image_copy = image.copy()
+        draw = ImageDraw.Draw(image_copy)
+
+        for box in boxes:
+            if len(box) != 4:
+                raise ValueError(f"Each box must have 4 elements, got {box}")
+            draw.rectangle(box, outline=outline, width=width)
+        return image_copy
+
+    
+    @staticmethod
+    def select_inner_image(image: Image.Image, box: List[Union[int, float]])-> Image:
+        """
+        Crop the specified number of pixels from the edges of an image.
+
+        Args:
+            image (PIL.Image.Image): The image to crop.
+            top (int): Number of pixels to crop from the top.
+            left (int): Number of pixels to crop from the left.
+            right (int): Number of pixels to crop from the right.
+            bottom (int): Number of pixels to crop from the bottom.
+
+        Returns:
+            PIL.Image.Image: The cropped image.
+        """
+        if (len(box) < 4):
+            raise ValueError("not enough coords")
+        
+        image_copy = image.copy()
+        width, height = image.size
+        # Validate the crop dimensions
+        if box[2] > width or box[3] > height:
+            raise ValueError(" inner image overflow ")
+        # Define the cropping box (left, upper, right, lower)
+        crop_box = (box[0], box[1], box[2], box[3])
+        # Crop the image
+        cropped_image = image_copy.crop(crop_box)
+        return cropped_image
