@@ -196,7 +196,7 @@ def run_table_recognition_by_year_selective(year: int, selective_config: dict, m
         print(f"Processing {current_file_base} - Pages: {[p+1 for p in page_indices]} (1-based)")
         
         # saving
-        new_result_name = os.path.splitext(os.path.basename(file_path))[0] + ".json"
+        new_result_name = os.path.splitext(os.path.basename(file_path))[0] + "_table.json"
 
         # selecting the right margin by year and version
         parserImages = JoradpFileParse(file_path)
