@@ -298,6 +298,8 @@ class JoradpFileParse:
                 # table_coords = ocr.localize_tables_in_image(image)
                 # returns a list of tables coord in the page
                 # if it is empty then consider the whole page as a table
+                print("index : " + str(index))
+                print("bboxes : " + str(bboxes))
                 if len(bboxes) == 0:
                     tmp_data = ocr.extract_selected_table_cells(image, True, [])
                     page_data.append({'table': [0, 0, image.width, image.height], 'table_data': tmp_data})
