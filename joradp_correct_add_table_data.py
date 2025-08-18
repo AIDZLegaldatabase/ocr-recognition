@@ -1,3 +1,4 @@
+import ast
 import os
 import json
 import csv
@@ -102,16 +103,22 @@ def load_selective_processing_config(csv_path='report_tables.csv'):
             for row in reader:
                 document_name = row['document_name'].replace('.json', '')  # Remove .json extension
                 page_number = int(row['page_number']) 
+                full_page = row['full_page'].lower() == "true"
+                table_boxes = ast.literal_eval(row['table_boxes'])
                 
                 # Only add if page_number >= 0 (since we subtract 1 and skip first page)
                 if page_number >= 0:
-                    selective_config[document_name].append(page_number)
+                    if (full_page and (len(table_boxes)>0)):
+                        raise TypeError("should not have unsynck like that")
+                    selective_config[document_name].append({'page_number': page_number, 'full_page': full_page, 'table_boxes': table_boxes })
                 
         # Sort page numbers for each document
         for doc_name in selective_config:
-            selective_config[doc_name].sort()
+            selective_config[doc_name].sort(key=lambda x: x["page_number"])
             
         print(f"Loaded selective processing config for {len(selective_config)} documents")
+        ###
+        print(selective_config)
         return dict(selective_config)
         
     except FileNotFoundError:
@@ -151,7 +158,10 @@ def run_table_recognition_by_year_selective(year: int, selective_config: dict, m
     
     Args:
         year (int): Year to process
-        selective_config (dict): Dictionary mapping document names to lists of page indices
+        selective_config (dict): Dictionary mapping document names to lists of dict containing
+            - page_number (int)
+            - full_page (bool)
+            - table_boxes (list)
         min_filename (str): Minimum filename to start processing from
     """
     ocr = OcrProcessor()
@@ -180,7 +190,8 @@ def run_table_recognition_by_year_selective(year: int, selective_config: dict, m
             continue
         
         # Get the page indices to process for this document
-        page_indices = selective_config[current_file_base]
+        page_indices = [ i['page_number'] for i in selective_config[current_file_base] ]
+        page_table_boxes = [ i['table_boxes'] for i in selective_config[current_file_base] ]
         
         print(f"Processing {current_file_base} - Pages: {[p+1 for p in page_indices]} (1-based)")
         
@@ -204,7 +215,7 @@ def run_table_recognition_by_year_selective(year: int, selective_config: dict, m
         parserImages.adjust_all_images_rotations_parallel()
         
         # Use selective processing with the specified page indices
-        data = parserImages.compute_images_table_data_selective(ocr, page_indices, manage_ocr=False)
+        data = parserImages.compute_images_table_data_selective(ocr, page_indices, page_table_boxes, False)
 
         with open('./result_json_tables/'+ str(year) +'/'+ new_result_name, 'w') as convert_file:
             convert_file.write(json.dumps(data))
@@ -226,6 +237,7 @@ years_to_process = set()
 for doc_name in selective_config.keys():
     # Extract year from document name (assuming format like F1962001)
     if doc_name.startswith('F') and len(doc_name) >= 8:
+        print(doc_name)
         try:
             year = int(doc_name[1:5])  # Extract year from F1962001
             years_to_process.add(year)
