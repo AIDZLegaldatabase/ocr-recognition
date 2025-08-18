@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Union
+import warnings
 
 class ImageBuilder:
     def __init__(self, image=None, layout_data=None, text_data=None):
@@ -307,16 +308,13 @@ class ImageBuilder:
         width, height = image.size
         # Validate the crop dimensions
         if box[2] > width or box[3] > height:
-            for i, box in enumerate(box):
-                # box is expected to be [x1, y1, x2, y2]
-                print(
-                    f"Box {i}: {box} | "
-                    f"box[2] ({box[2]}) > width ({width}) -> {box[2] > width} | "
-                    f"box[3] ({box[3]}) > height ({height}) -> {box[3] > height}"
-                )
-            raise ValueError(" inner image overflow ")
-        # Define the cropping box (left, upper, right, lower)
-        crop_box = (box[0], box[1], box[2], box[3])
+            warnings.warn(
+                f"Inner image overflow: box={box}, width={width}, height={height}, "
+                f"box[2]={box[2]}, box[3]={box[3]}",
+                UserWarning
+            )
+                # Define the cropping box (left, upper, right, lower)
+        crop_box = (box[0], box[1], min(box[2], width), min(box[3], height))
         # Crop the image
         cropped_image = image_copy.crop(crop_box)
         return cropped_image
