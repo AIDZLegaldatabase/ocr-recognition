@@ -307,6 +307,13 @@ class ImageBuilder:
         width, height = image.size
         # Validate the crop dimensions
         if box[2] > width or box[3] > height:
+            for i, box in enumerate(box):
+                # box is expected to be [x1, y1, x2, y2]
+                print(
+                    f"Box {i}: {box} | "
+                    f"box[2] ({box[2]}) > width ({width}) -> {box[2] > width} | "
+                    f"box[3] ({box[3]}) > height ({height}) -> {box[3] > height}"
+                )
             raise ValueError(" inner image overflow ")
         # Define the cropping box (left, upper, right, lower)
         crop_box = (box[0], box[1], box[2], box[3])

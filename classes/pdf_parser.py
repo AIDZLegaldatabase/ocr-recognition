@@ -299,11 +299,14 @@ class JoradpFileParse:
                 # if it is empty then consider the whole page as a table
 
                 if len(bboxes) == 0:
+                    print("whole page")
                     tmp_data = ocr.extract_selected_table_cells(image, True, [])
                     page_data.append({'table': [0, 0, image.width, image.height], 'table_data': tmp_data})
                 else:
 
                     for table_coord in bboxes:
+                        print("pin point")
+                        print(table_coord)
                         tmp_data = ocr.extract_selected_table_cells(image, False, table_coord)
                         page_data.append({'table': table_coord, 'table_data': tmp_data})
                 table_data_all_images.append({'index': index, 'page_data': page_data})
