@@ -292,6 +292,8 @@ class JoradpFileParse:
                 ocr.load_table_models()
             
             table_data_all_images = []
+            print("gloabl bboxes : " + str(table_boxes))
+            print(type(table_boxes))
             
             for image, index, bboxes in zip(selected_images, valid_indices, table_boxes):
                 page_data = []
@@ -300,6 +302,7 @@ class JoradpFileParse:
                 # if it is empty then consider the whole page as a table
                 print("index : " + str(index))
                 print("bboxes : " + str(bboxes))
+                print(type(bboxes))
                 if len(bboxes) == 0:
                     tmp_data = ocr.extract_selected_table_cells(image, True, [])
                     page_data.append({'table': [0, 0, image.width, image.height], 'table_data': tmp_data})
