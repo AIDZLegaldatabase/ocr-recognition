@@ -132,17 +132,17 @@ def visualize_page_layouts(page_data, figsize=(20, 25)):
 base_dir = "result_json"
 
 # Iterate through each year folder
-for year in sorted(os.listdir(base_dir), reverse=True):
+for year in sorted(os.listdir(base_dir), reverse=False):
     year_path = os.path.join(base_dir, year)
     
-    if os.path.isdir(year_path) and (year > "1964"):  # Ensure it's a directory
+    if os.path.isdir(year_path):  # Ensure it's a directory
         print(f"Processing year: {year}")
 
         # Iterate through each JSON file in the year folder
         for filename in sorted(os.listdir(year_path)):
             if filename.endswith(".json"):
                 file_path = os.path.join(year_path, filename)
-                print(f"Processing file: {filename}")
+                #print(f"Processing file: {filename}")
 
                 # Read the JSON file
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -159,5 +159,5 @@ for year in sorted(os.listdir(base_dir), reverse=True):
                         print(f"File: {filename}, Page: {page['index']}")
                         
                         # Visualize all layouts and their text boxes in one figure
-                        fig = visualize_page_layouts(page)
-                        plt.show()
+                        #fig = visualize_page_layouts(page)
+                        #plt.show()

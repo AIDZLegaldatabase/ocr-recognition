@@ -1,3 +1,4 @@
+from typing import List
 from classes.image_builder import ImageBuilder
 from classes.ocr_processor import OcrProcessor
 from PIL import Image
@@ -252,7 +253,8 @@ class JoradpFileParse:
         
         return result_ocr
     
-    def compute_images_table_data_selective(self, ocr: OcrProcessor, page_indices: list, manage_ocr =True):
+    ## layout coords
+    def compute_images_table_data_selective(self, ocr: OcrProcessor, page_indices: list, table_boxes: List[List[List[float]]], manage_ocr):
         """
         Parse only specific pages to text structure using OCR.
         Pages not in the indices list will have empty results.
@@ -271,6 +273,9 @@ class JoradpFileParse:
         if (len(page_indices) == 0):
             return []
         
+        if (len(page_indices) != len(table_boxes)):
+            raise ValueError("layout not identified with targets")
+        
         # Validate page indices
         valid_indices = [i for i in page_indices if 0 <= i < total_pages]
         if len(valid_indices) != len(page_indices):
@@ -286,25 +291,27 @@ class JoradpFileParse:
             if manage_ocr:
                 ocr.load_table_models()
             
-            table_data_full = []
+            table_data_all_images = []
             
-            for image in selected_images:
-                table_coords = ocr.localize_tables_in_image(image)
+            for image, index, bboxes in zip(selected_images, valid_indices, table_boxes):
+                page_data = []
+                # table_coords = ocr.localize_tables_in_image(image)
                 # returns a list of tables coord in the page
                 # if it is empty then consider the whole page as a table
-                if len(table_coords) == 0:
+                if len(bboxes) == 0:
                     tmp_data = ocr.extract_selected_table_cells(image, True, [])
-                    table_data_full.append({'table': [0, 0, image.width, image.height], 'table_data': tmp_data})
+                    page_data.append({'table': [0, 0, image.width, image.height], 'table_data': tmp_data})
                 else:
-                    for table_coord in table_coords:
+                    for table_coord in bboxes:
                         tmp_data = ocr.extract_selected_table_cells(image, False, table_coord['bbox'])
-                        table_data_full.append({'table': table_coord, 'table_data': tmp_data})
+                        page_data.append({'table': table_coord['bbox'], 'table_data': tmp_data})
+                table_data_all_images.append({'index': index, 'page_data': page_data})
 
             if manage_ocr:
                 ocr.clear_all_models()
                 
         
-        return table_data_full
+        return table_data_all_images
 
     def parse_images_to_text_structure_selective_heavy(self, ocr: OcrProcessor, page_indices: list):
         """
