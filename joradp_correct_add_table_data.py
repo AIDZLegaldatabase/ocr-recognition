@@ -105,6 +105,8 @@ def load_selective_processing_config(csv_path='report_tables.csv'):
                 page_number = int(row['page_number']) 
                 full_page = row['full_page'].lower() == "true"
                 table_boxes = ast.literal_eval(row['table_boxes'])
+                if isinstance(table_boxes, str):
+                    table_boxes = []
                 
                 # Only add if page_number >= 0 (since we subtract 1 and skip first page)
                 if page_number >= 0:
