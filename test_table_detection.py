@@ -66,6 +66,53 @@ def find_clusters_1d(
 
     return final_clusters
 
+def find_table_bounding_boxes(
+    table_grid
+):
+    """
+    Finds the bounding boxes of tables by "smearing" (closing)
+    the detected horizontal and vertical lines.
+
+    Args:
+        morphed_horizontal: The binary image containing only long horizontal lines.
+        morphed_vertical: The binary image containing only long vertical lines.
+
+    Returns:
+        A list of bounding box tuples (x, y, w, h).
+    """
+    
+    # 1. Combine the horizontal and vertical line images
+    #table_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
+
+    # 2. Morphological Close ("Smear" the lines together)
+    # This is the most important parameter to tune.
+    # (15, 15) means it will connect lines that are up to 15px apart.
+    kernel_size = (15, 15) 
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+    
+    # "Closing" = Dilate (thicken) then Erode (thin)
+    # This fills gaps and connects nearby lines.
+    closed_grid = cv2.morphologyEx(table_grid, cv2.MORPH_CLOSE, kernel)
+
+    # 3. Find contours of the new "blobs"
+    # These contours now represent whole tables, not individual lines.
+    contours, _ = cv2.findContours(
+        closed_grid, 
+        cv2.RETR_EXTERNAL, 
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+    
+
+    bounding_boxes = []
+    for cnt in contours:
+        # 4. Get the bounding box for each blob
+        bbox = cv2.boundingRect(cnt)
+        if bbox[2] > 185 and bbox[3] > 100:
+            bounding_boxes.append(bbox)
+        
+    return bounding_boxes
+
+
 def detect_table_from_image_data(img: np.ndarray):
     """
     Detects if an image's data (numpy array) contains a table.
@@ -135,6 +182,8 @@ def detect_table_from_image_data(img: np.ndarray):
     contours_v, _ = cv2.findContours(
         morphed_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
+    
+    combined_grid =  cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
     # Validate number of countours
 
@@ -146,6 +195,16 @@ def detect_table_from_image_data(img: np.ndarray):
     final_contours_v = [
         cnt for cnt in contours_v if cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT
     ]
+    
+    # Create new image with combined grids
+    
+    mask = np.zeros(combined_grid.shape[:2], dtype=np.uint8)
+    
+    cv2.drawContours(mask, final_contours_h, -1, (255), cv2.FILLED)
+    
+    cv2.drawContours(mask, final_contours_v, -1, (255), cv2.FILLED)
+    
+    result = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
     
     #for cnt in contours_v:
     #    height= cv2.boundingRect(cnt)[3]
@@ -168,8 +227,8 @@ def detect_table_from_image_data(img: np.ndarray):
         and num_vertical_lines >= MIN_VERTICAL_LINES
     ):
         # Save debug images (optional)
-        # cv2.imwrite(f"{i}_debug_horizontal.png", morphed_horizontal)
-        cv2.imwrite(f"{i}_debug_vertical.png", morphed_vertical)
+        #cv2.imwrite(f"{i}_debug_horizontal.png", morphed_horizontal)
+        #cv2.imwrite(f"{i}_debug_vertical.png", morphed_vertical)
 
         has_table = True
     # elif (
@@ -189,10 +248,10 @@ def detect_table_from_image_data(img: np.ndarray):
     if num_vertical_lines == 1:
             centre_line_x = vertical_lines_clusters[0][0]
     
-    return has_table, centre_line_x
+    return has_table, result
 
 
-parserImages = JoradpFileParse("./data_test/F1978025.pdf")
+parserImages = JoradpFileParse("./data_test/F2024080.pdf")
 print("with ocr")
 
 parserImages.get_images_with_pymupdf()
@@ -202,11 +261,11 @@ parserImages.resize_image_to_fit_ocr()
 parserImages.crop_all_images(top=85, left=0, right=0, bottom=15)
 
 # 2024
-# parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
+parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
 
-# parserImages.adjust_all_images_rotations_parallel()
+parserImages.adjust_all_images_rotations_parallel()
 
-# parserImages.adjust_all_images_rotations_parallel()
+parserImages.adjust_all_images_rotations_parallel()
 
 # --- Part C: Analyze the extracted pages ---
 
@@ -218,10 +277,27 @@ for i, page_image in enumerate(parserImages.images):
         continue
 
     # Use our refactored function
-    has_table, centre_line_x = detect_table_from_image_data(np.array(page_image))
+    has_table, grid = detect_table_from_image_data(np.array(page_image))
 
-    print(f"Analysis of PDF Page {i+1}: Table detected = {has_table}, centre line x: {centre_line_x}")
+    if has_table:
+        print(f"--- Page {i+1}: Table(s) detected! ---")
+        
+        # 2. Find the bounding boxes of the tables
+        table_boxes = find_table_bounding_boxes(grid)
+        
+        print(f"Found {len(table_boxes)} table(s) on this page.")
 
-    # You can also save the images to see them
-    # cv2.imwrite(f"pdf_page_{pdf_page_num}.png", page_image)
+        # Create a copy of the image to draw on
+        debug_image = np.array(page_image)
+
+        if table_boxes:
+            # 3. Draw the boxes
+            for (x, y, w, h) in table_boxes:   
+                cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3) # Draw red box
+            
+                # Save the result
+            cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
+
+    else:
+        print(f"--- Page {i+1}: No tables found. ---")
 
