@@ -11,7 +11,6 @@ from classes.image_builder import ImageBuilder
 from classes.joradp_importer import JoradpImporter
 
 
-
 def find_clusters_1d(
     data: List[float], gap_threshold: float, min_cluster_size: int = 1
 ) -> Dict[int, List[float]]:
@@ -66,9 +65,56 @@ def find_clusters_1d(
 
     return final_clusters
 
-def find_table_bounding_boxes(
-    table_grid
+def find_inferred_boxes(
+    contours_v: list, 
+    image_height: int, 
+    height_threshold_ratio: float = 0.95
 ):
+    """
+    Finds table boxes by inferring them from parallel, full-height
+    vertical lines. This handles cases where top/bottom lines are cropped.
+
+    Args:
+        contours_v: The list of vertical line contours.
+        image_height: The height of the image.
+        height_threshold_ratio: What percentage of the total height
+                                a line must be to be considered "full-height".
+
+    Returns:
+        A list of inferred bounding box tuples (x, y, w, h).
+    """
+    
+    full_height_line_x_coords = []
+    
+    # 1. Find all "full-height" vertical lines
+    for cnt in contours_v:
+        (lx, ly, lw, lh) = cv2.boundingRect(cnt)
+        
+        # Check if the line's height is >= 95% of the image height
+        if lh >= (image_height * height_threshold_ratio):
+            full_height_line_x_coords.append(lx)
+
+    # 2. Sort the x-coordinates
+    full_height_line_x_coords.sort()
+
+    # 3. Pair up adjacent lines to form boxes
+    inferred_boxes = []
+    if len(full_height_line_x_coords) >= 2:
+        for i in range(len(full_height_line_x_coords) - 1):
+            x1 = full_height_line_x_coords[i]
+            x2 = full_height_line_x_coords[i+1]
+            
+            # Create the full-height bounding box
+            x = x1
+            y = 0
+            w = x2 - x1
+            h = image_height
+            
+            inferred_boxes.append((x, y, w, h))
+            
+    return inferred_boxes
+
+def find_table_bounding_boxes(table_grid):
     """
     Finds the bounding boxes of tables by "smearing" (closing)
     the detected horizontal and vertical lines.
@@ -80,16 +126,19 @@ def find_table_bounding_boxes(
     Returns:
         A list of bounding box tuples (x, y, w, h).
     """
-    
+
+    TABLE_MIN_HEIGHT = 100
+    TABLE_MIN_WIDTH = 185
+
     # 1. Combine the horizontal and vertical line images
-    #table_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
+    # table_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
     # 2. Morphological Close ("Smear" the lines together)
     # This is the most important parameter to tune.
     # (15, 15) means it will connect lines that are up to 15px apart.
-    kernel_size = (15, 15) 
+    kernel_size = (15, 15)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-    
+
     # "Closing" = Dilate (thicken) then Erode (thin)
     # This fills gaps and connects nearby lines.
     closed_grid = cv2.morphologyEx(table_grid, cv2.MORPH_CLOSE, kernel)
@@ -97,19 +146,16 @@ def find_table_bounding_boxes(
     # 3. Find contours of the new "blobs"
     # These contours now represent whole tables, not individual lines.
     contours, _ = cv2.findContours(
-        closed_grid, 
-        cv2.RETR_EXTERNAL, 
-        cv2.CHAIN_APPROX_SIMPLE
+        closed_grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-    
 
     bounding_boxes = []
     for cnt in contours:
         # 4. Get the bounding box for each blob
         bbox = cv2.boundingRect(cnt)
-        if bbox[2] > 185 and bbox[3] > 100:
+        if bbox[2] > TABLE_MIN_WIDTH and bbox[3] > TABLE_MIN_HEIGHT:
             bounding_boxes.append(bbox)
-        
+
     return bounding_boxes
 
 
@@ -129,7 +175,7 @@ def detect_table_from_image_data(img: np.ndarray):
     # PARAMS
     MIN_HORIZONTAL_LINES = 3
     MIN_VERTICAL_LINES = 2
-    LINE_MINIMAL_WIDTH = 185
+    LINE_MINIMAL_WIDTH = 140
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT = 100
     has_table = False
@@ -137,16 +183,8 @@ def detect_table_from_image_data(img: np.ndarray):
 
     # Crop image
     width, height, _ = img.shape
-    new_height = 1400
-    y_start = max(0, height - new_height)
 
-    # Perform the crop (slice)
-    # [y_start: , :] means:
-    # y-axis: from y_start to the end
-    # x-axis: (:) all pixels
-    resized_image = img[y_start:, :, :]
-
-    gray = cv2.cvtColor(resized_image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # 1. Apply Sobel operators
     sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
@@ -182,8 +220,8 @@ def detect_table_from_image_data(img: np.ndarray):
     contours_v, _ = cv2.findContours(
         morphed_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-    
-    combined_grid =  cv2.bitwise_or(morphed_horizontal, morphed_vertical)
+
+    combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
     # Validate number of countours
 
@@ -191,64 +229,61 @@ def detect_table_from_image_data(img: np.ndarray):
     final_contours_h = [
         cnt for cnt in contours_h if cv2.boundingRect(cnt)[2] > LINE_MINIMAL_WIDTH
     ]
-    
+
     final_contours_v = [
         cnt for cnt in contours_v if cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT
     ]
-    
+
     # Create new image with combined grids
-    
+
     mask = np.zeros(combined_grid.shape[:2], dtype=np.uint8)
-    
+
     cv2.drawContours(mask, final_contours_h, -1, (255), cv2.FILLED)
-    
+
     cv2.drawContours(mask, final_contours_v, -1, (255), cv2.FILLED)
+
+    img_grid = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
+
+    # Find the bounding boxes of the tables
+    table_boxes = find_table_bounding_boxes(img_grid)
     
-    result = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
+    # Infer boxes that are formed by full vertical lines
+    table_boxes+=find_inferred_boxes(final_contours_v, height,100)
     
-    #for cnt in contours_v:
-    #    height= cv2.boundingRect(cnt)[3]
-    #    print(f"The height of this line is {height}")    
+    #print(f" before filtering we have {len(table_boxes)} bboxes")
 
-    num_horizontal_lines = len(final_contours_h)
-    num_vertical_lines = len(contours_v)
+    filtered_boxes = []
+    for bbox in table_boxes:
+        (bx, by, bw, bh) = bbox
+        h_count = 0
+        v_count = 0
 
+        # Check horizontal lines
+        for cnt in final_contours_h:
+            # Get the bounding box of the line
+            (lx, ly, lw, lh) = cv2.boundingRect(cnt)
 
-    vertical_lines_clusters = find_clusters_1d(
-        [cv2.boundingRect(cnt)[0] for cnt in final_contours_v],
-        gap_threshold=10,
-        min_cluster_size=1,
-    )
-    
+            # Find the center of the line's bounding box
+            center_x = lx + lw // 2
+            center_y = ly + lh // 2
 
-    num_vertical_lines = len(vertical_lines_clusters)
-    if (
-        num_horizontal_lines > MIN_HORIZONTAL_LINES
-        and num_vertical_lines >= MIN_VERTICAL_LINES
-    ):
-        # Save debug images (optional)
-        #cv2.imwrite(f"{i}_debug_horizontal.png", morphed_horizontal)
-        #cv2.imwrite(f"{i}_debug_vertical.png", morphed_vertical)
+            # Check if the line's center is inside the table's box
+            if (bx <= center_x <= bx + bw) and (by <= center_y <= by + bh):
+                h_count += 1
 
-        has_table = True
-    # elif (
-    #     (num_horizontal_lines + num_vertical_lines > NUM_TOTAL_LINES)
-    #     and num_horizontal_lines > 0
-    #     and (
-    #         check_vertical_diversity([cv2.boundingRect(cnt)[2] for cnt in contours_v])
-    #         > 1
-    #     )
-    # ):
-    #     # Save debug images (optional)
-    #     # cv2.imwrite(f"{i}_debug_horizontal.png", morphed_horizontal)
-    #     cv2.imwrite(f"{i}_debug_vertical.png", morphed_vertical)
+        # Check vertical lines
+        for cnt in final_contours_v:
+            (lx, ly, lw, lh) = cv2.boundingRect(cnt)
+            center_x = lx + lw // 2
+            center_y = ly + lh // 2
 
-    #     has_table = True
-    # IF we only have a single vertical line, get the first element of the first cluster 
-    if num_vertical_lines == 1:
-            centre_line_x = vertical_lines_clusters[0][0]
-    
-    return has_table, result
+            if (bx <= center_x <= bx + bw) and (by <= center_y <= by + bh):
+                v_count += 1
+
+        if h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES:
+            filtered_boxes.append(bbox)
+
+    return filtered_boxes, img_grid
 
 
 parserImages = JoradpFileParse("./data_test/F2024080.pdf")
@@ -272,32 +307,29 @@ parserImages.adjust_all_images_rotations_parallel()
 print("\n--- Analyzing Extracted Pages ---")
 
 for i, page_image in enumerate(parserImages.images):
-    
-    if i==0:
+
+    if i == 0:
         continue
 
     # Use our refactored function
-    has_table, grid = detect_table_from_image_data(np.array(page_image))
+    table_boxes, img_grid = detect_table_from_image_data(np.array(page_image))
+    #cv2.imwrite(f"page_{i+1}_grid.png", img_grid)
+    print(f"Found {len(table_boxes)} table(s) on this page.")
 
-    if has_table:
+    # Create a copy of the image to draw on
+    debug_image = np.array(page_image)
+    if table_boxes:
+        # 3. Draw the boxes
+        for x, y, w, h in table_boxes:
+            cv2.rectangle(
+                debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3
+            )
+
+            # Save the result
+        cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
+    
+
         print(f"--- Page {i+1}: Table(s) detected! ---")
-        
-        # 2. Find the bounding boxes of the tables
-        table_boxes = find_table_bounding_boxes(grid)
-        
-        print(f"Found {len(table_boxes)} table(s) on this page.")
-
-        # Create a copy of the image to draw on
-        debug_image = np.array(page_image)
-
-        if table_boxes:
-            # 3. Draw the boxes
-            for (x, y, w, h) in table_boxes:   
-                cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3) # Draw red box
-            
-                # Save the result
-            cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
 
     else:
         print(f"--- Page {i+1}: No tables found. ---")
-
