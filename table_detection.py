@@ -152,6 +152,7 @@ def find_table_bounding_boxes(table_grid):
 
 
 def core_line_detection(img):
+    SOBEL_PIXEL_INTENSITY_THRESHOLD = 200
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -163,8 +164,12 @@ def core_line_detection(img):
     abs_sobel_y = np.absolute(sobel_y)
 
     # 2. Threshold
-    _, thresh_x = cv2.threshold(abs_sobel_x, 200, 255, cv2.THRESH_BINARY)
-    _, thresh_y = cv2.threshold(abs_sobel_y, 200, 255, cv2.THRESH_BINARY)
+    _, thresh_x = cv2.threshold(
+        abs_sobel_x, SOBEL_PIXEL_INTENSITY_THRESHOLD, 255, cv2.THRESH_BINARY
+    )
+    _, thresh_y = cv2.threshold(
+        abs_sobel_y, SOBEL_PIXEL_INTENSITY_THRESHOLD, 255, cv2.THRESH_BINARY
+    )
 
     # 3. Morphological Operations
     horizontal_kernel_len = int(gray.shape[1] / 20)
@@ -249,8 +254,6 @@ def detect_table_from_image_data(img: np.ndarray):
     LINE_MINIMAL_WIDTH = 140
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT = 130
-    has_table = False
-    centre_line_x = 0
 
     # Crop image
     width, height, _ = img.shape
@@ -324,4 +327,3 @@ def detect_table_from_image_data(img: np.ndarray):
             filtered_boxes.append(bbox)
 
     return filtered_boxes, img_grid
-
