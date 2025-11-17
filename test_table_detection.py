@@ -65,10 +65,9 @@ def find_clusters_1d(
 
     return final_clusters
 
+
 def find_inferred_boxes(
-    contours_v: list, 
-    image_height: int, 
-    height_threshold_ratio: float = 0.95
+    contours_v: list, image_height: int, height_threshold_ratio: float = 0.95
 ):
     """
     Finds table boxes by inferring them from parallel, full-height
@@ -83,13 +82,13 @@ def find_inferred_boxes(
     Returns:
         A list of inferred bounding box tuples (x, y, w, h).
     """
-    
+
     full_height_line_x_coords = []
-    
+
     # 1. Find all "full-height" vertical lines
     for cnt in contours_v:
         (lx, ly, lw, lh) = cv2.boundingRect(cnt)
-        
+
         # Check if the line's height is >= 95% of the image height
         if lh >= (image_height * height_threshold_ratio):
             full_height_line_x_coords.append(lx)
@@ -102,17 +101,18 @@ def find_inferred_boxes(
     if len(full_height_line_x_coords) >= 2:
         for i in range(len(full_height_line_x_coords) - 1):
             x1 = full_height_line_x_coords[i]
-            x2 = full_height_line_x_coords[i+1]
-            
+            x2 = full_height_line_x_coords[i + 1]
+
             # Create the full-height bounding box
             x = x1
             y = 0
             w = x2 - x1
             h = image_height
-            
+
             inferred_boxes.append((x, y, w, h))
-            
+
     return inferred_boxes
+
 
 def find_table_bounding_boxes(table_grid):
     """
@@ -136,7 +136,7 @@ def find_table_bounding_boxes(table_grid):
     # 2. Morphological Close ("Smear" the lines together)
     # This is the most important parameter to tune.
     # (15, 15) means it will connect lines that are up to 15px apart.
-    kernel_size = (15, 15)
+    kernel_size = (10, 10)
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
     # "Closing" = Dilate (thicken) then Erode (thin)
@@ -177,7 +177,7 @@ def detect_table_from_image_data(img: np.ndarray):
     MIN_VERTICAL_LINES = 2
     LINE_MINIMAL_WIDTH = 140
     NUM_TOTAL_LINES = 4
-    LINE_MINIMAL_HEIGHT = 100
+    LINE_MINIMAL_HEIGHT = 130
     has_table = False
     centre_line_x = 0
 
@@ -187,10 +187,10 @@ def detect_table_from_image_data(img: np.ndarray):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # 1. Apply Sobel operators
-    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
     abs_sobel_x = np.absolute(sobel_x)
 
-    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
     abs_sobel_y = np.absolute(sobel_y)
 
     # 2. Threshold
@@ -225,7 +225,7 @@ def detect_table_from_image_data(img: np.ndarray):
 
     # Validate number of countours
 
-    # Remove small horizontal nad vertical lines, the width limit is purely empirical
+    # Remove small horizontal and vertical lines, the width limit is purely empirical
     final_contours_h = [
         cnt for cnt in contours_h if cv2.boundingRect(cnt)[2] > LINE_MINIMAL_WIDTH
     ]
@@ -234,27 +234,54 @@ def detect_table_from_image_data(img: np.ndarray):
         cnt for cnt in contours_v if cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT
     ]
 
+    vertical_lines_clusters = find_clusters_1d(
+        [cv2.boundingRect(cnt)[0] for cnt in final_contours_v],
+        gap_threshold=10,
+        min_cluster_size=1,
+    )
+
+    # Find the cluster of lines in the middle of the page:
+    centre_lines = [
+        vertical_lines_clusters[x]
+        for x in vertical_lines_clusters.keys()
+        if all(
+            (width / 2) - 200 < elt < (width / 2) + 200
+            for elt in vertical_lines_clusters[x]
+        )
+    ]
+    print(len(centre_lines))
+    final_contours_v_without_central = (
+        final_contours_v
+        if len(centre_lines) == 0
+        else [
+            cnt
+            for cnt in final_contours_v
+            if cv2.boundingRect(cnt)[0] not in centre_lines[0]
+        ]
+    )
+
     # Create new image with combined grids
 
     mask = np.zeros(combined_grid.shape[:2], dtype=np.uint8)
 
     cv2.drawContours(mask, final_contours_h, -1, (255), cv2.FILLED)
 
-    cv2.drawContours(mask, final_contours_v, -1, (255), cv2.FILLED)
+    cv2.drawContours(mask, final_contours_v_without_central, -1, (255), cv2.FILLED)
 
     img_grid = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
 
     # Find the bounding boxes of the tables
     table_boxes = find_table_bounding_boxes(img_grid)
-    
-    # Infer boxes that are formed by full vertical lines
-    table_boxes+=find_inferred_boxes(final_contours_v, height,100)
-    
-    #print(f" before filtering we have {len(table_boxes)} bboxes")
+
+    # Infer boxes that are formed by full vertical lines, we will dectivate it for now but might need it later
+    # table_boxes+=find_inferred_boxes(final_contours_v, height,100)
+
+    # print(f" before filtering we have {len(table_boxes)} bboxes")
 
     filtered_boxes = []
     for bbox in table_boxes:
         (bx, by, bw, bh) = bbox
+        cv2.rectangle(img_grid, (bx, by), (bx + bw, by + bh), 255, 3)
         h_count = 0
         v_count = 0
 
@@ -268,68 +295,90 @@ def detect_table_from_image_data(img: np.ndarray):
             center_y = ly + lh // 2
 
             # Check if the line's center is inside the table's box
-            if (bx <= center_x <= bx + bw) and (by <= center_y <= by + bh):
+            if (bx < center_x < bx + bw) and (by < center_y < by + bh):
                 h_count += 1
 
         # Check vertical lines
-        for cnt in final_contours_v:
+        for cnt in final_contours_v_without_central:
             (lx, ly, lw, lh) = cv2.boundingRect(cnt)
             center_x = lx + lw // 2
             center_y = ly + lh // 2
-
-            if (bx <= center_x <= bx + bw) and (by <= center_y <= by + bh):
+            # The last check is only done in vertical lines because they're continuous usually
+            if (bx < center_x < bx + bw) and (by < center_y < by + bh) and (lh / bh > 0.5):
                 v_count += 1
 
-        if h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES:
+        print(f"This bbox has {h_count} horizontal lines and {v_count} vertical lines")
+        if (h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES) or (
+            h_count + v_count > NUM_TOTAL_LINES
+        ):
             filtered_boxes.append(bbox)
 
     return filtered_boxes, img_grid
 
 
-parserImages = JoradpFileParse("./data_test/F2024080.pdf")
+parserImages = JoradpFileParse("./data_test/F1978025.pdf")
 print("with ocr")
 
 parserImages.get_images_with_pymupdf()
 parserImages.resize_image_to_fit_ocr()
-# parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
 # 1978
 parserImages.crop_all_images(top=85, left=0, right=0, bottom=15)
 
 # 2024
-parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
+#parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
+#parserImages.adjust_all_images_rotations_parallel()
 
-parserImages.adjust_all_images_rotations_parallel()
-
-parserImages.adjust_all_images_rotations_parallel()
 
 # --- Part C: Analyze the extracted pages ---
+debug_mode = True
+# Create a resizable window in advance
+window_name = "Table Detection Debug"
+cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
 
 print("\n--- Analyzing Extracted Pages ---")
 
-for i, page_image in enumerate(parserImages.images):
+for i, pil_page_image in enumerate(parserImages.images):
 
     if i == 0:
         continue
+    # 1. Convert PIL Image (assuming RGB) to OpenCV format (BGR)
+    page_image_rgb = np.array(pil_page_image)
+    # page_image_gray = cv2.cvtColor(page_image_rgb, cv2.COLOR_RGB2GRAY)
 
     # Use our refactored function
-    table_boxes, img_grid = detect_table_from_image_data(np.array(page_image))
-    #cv2.imwrite(f"page_{i+1}_grid.png", img_grid)
+    table_boxes, img_grid = detect_table_from_image_data(page_image_rgb)
+    # cv2.imwrite(f"page_{i+1}_grid.png", img_grid)
     print(f"Found {len(table_boxes)} table(s) on this page.")
 
     # Create a copy of the image to draw on
-    debug_image = np.array(page_image)
+    debug_image = page_image_rgb
     if table_boxes:
         # 3. Draw the boxes
         for x, y, w, h in table_boxes:
-            cv2.rectangle(
-                debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3
-            )
+            cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3)
 
             # Save the result
-        cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
-    
+        # cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
 
         print(f"--- Page {i+1}: Table(s) detected! ---")
 
     else:
         print(f"--- Page {i+1}: No tables found. ---")
+
+    if debug_mode:
+
+        combined_display = cv2.hconcat(
+            [cv2.cvtColor(img_grid, cv2.COLOR_GRAY2BGR), debug_image]
+        )
+        # 6. Show the combined image and wait
+        cv2.imshow(window_name, combined_display)
+        # Wait indefinitely for a key press
+        key = cv2.waitKey(0)
+
+        # 7. Add a quit condition
+        if key == ord("q"):
+            print("Quitting loop...")
+            break
+# 8. Clean up windows after the loop
+cv2.destroyAllWindows()
