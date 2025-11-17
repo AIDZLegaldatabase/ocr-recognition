@@ -1,14 +1,6 @@
 import cv2
 import numpy as np
-import sys
-import os
 from typing import List, Dict
-import time
-from tqdm import tqdm
-from classes.pdf_parser import JoradpFileParse
-from classes.ocr_processor import OcrProcessor
-from classes.image_builder import ImageBuilder
-from classes.joradp_importer import JoradpImporter
 
 
 def find_clusters_1d(
@@ -333,70 +325,3 @@ def detect_table_from_image_data(img: np.ndarray):
 
     return filtered_boxes, img_grid
 
-
-parserImages = JoradpFileParse("./data_test/F1978025.pdf")
-print("with ocr")
-
-parserImages.get_images_with_pymupdf()
-parserImages.resize_image_to_fit_ocr()
-# 1978
-parserImages.crop_all_images(top=85, left=0, right=0, bottom=15)
-
-# 2024
-#parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
-#parserImages.adjust_all_images_rotations_parallel()
-
-
-# --- Part C: Analyze the extracted pages ---
-debug_mode = True
-# Create a resizable window in advance
-window_name = "Table Detection Debug"
-cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-
-
-print("\n--- Analyzing Extracted Pages ---")
-
-for i, pil_page_image in enumerate(parserImages.images):
-
-    if i == 0:
-        continue
-    # 1. Convert PIL Image (assuming RGB) to OpenCV format (BGR)
-    page_image_rgb = np.array(pil_page_image)
-    # page_image_gray = cv2.cvtColor(page_image_rgb, cv2.COLOR_RGB2GRAY)
-
-    # Use our refactored function
-    table_boxes, img_grid = detect_table_from_image_data(page_image_rgb)
-    # cv2.imwrite(f"page_{i+1}_grid.png", img_grid)
-    print(f"Found {len(table_boxes)} table(s) on this page.")
-
-    # Create a copy of the image to draw on
-    debug_image = page_image_rgb
-    if table_boxes:
-        # 3. Draw the boxes
-        for x, y, w, h in table_boxes:
-            cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3)
-
-            # Save the result
-        # cv2.imwrite(f"page_{i+1}_tables_detected.png", debug_image)
-
-        print(f"--- Page {i+1}: Table(s) detected! ---")
-
-    else:
-        print(f"--- Page {i+1}: No tables found. ---")
-
-    if debug_mode:
-
-        combined_display = cv2.hconcat(
-            [cv2.cvtColor(img_grid, cv2.COLOR_GRAY2BGR), debug_image]
-        )
-        # 6. Show the combined image and wait
-        cv2.imshow(window_name, combined_display)
-        # Wait indefinitely for a key press
-        key = cv2.waitKey(0)
-
-        # 7. Add a quit condition
-        if key == ord("q"):
-            print("Quitting loop...")
-            break
-# 8. Clean up windows after the loop
-cv2.destroyAllWindows()
