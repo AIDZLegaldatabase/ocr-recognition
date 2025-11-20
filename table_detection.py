@@ -201,12 +201,15 @@ def core_line_detection(img):
 
 
 def filter_central_v_line(contours_v, img_width):
-    CENTRE_LINE_TOLERANCE = 200
+    CENTRE_LINE_TOLERANCE = 100
+    CLSUTERS_GAP_THRESHOLD = 10
     vertical_lines_clusters = find_clusters_1d(
         [cv2.boundingRect(cnt)[0] for cnt in contours_v],
-        gap_threshold=10,
+        gap_threshold=CLSUTERS_GAP_THRESHOLD,
         min_cluster_size=1,
     )
+
+    print(f"v lines clusters: {vertical_lines_clusters}")
 
     # Find the cluster of lines in the middle of the page:
     centre_lines_coordinates_x = [
@@ -219,16 +222,30 @@ def filter_central_v_line(contours_v, img_width):
             for elt in vertical_lines_clusters[x]
         )
     ]
+    idx_centre_lines = 0
+    if len(centre_lines_coordinates_x) > 1:
+        mean_diff = []
+        for centre_line_cluster in centre_lines_coordinates_x:
+            mean_diff.append(
+                (
+                    sum([abs(x - img_width/2) for x in centre_line_cluster])
+                    / len(centre_line_cluster)
+                )
+            )
+        print(f"mean diffs {mean_diff}")
+        idx_centre_lines = mean_diff.index(min(mean_diff))
 
     # If there's a central cluster then ommit any line item which has the x of
     # the bounding box in the list of cenytre lines coordinates
+    if len(centre_lines_coordinates_x) > 0:
+        print(f" v lines to remove : {centre_lines_coordinates_x[idx_centre_lines]}")
     contours_v_without_central = (
         contours_v
         if len(centre_lines_coordinates_x) == 0
         else [
             cnt
             for cnt in contours_v
-            if cv2.boundingRect(cnt)[0] not in centre_lines_coordinates_x[0]
+            if cv2.boundingRect(cnt)[0] not in centre_lines_coordinates_x[idx_centre_lines]
         ]
     )
 
@@ -249,14 +266,15 @@ def detect_table_from_image_data(img: np.ndarray):
         print("Error: Invalid image data.")
         return False
     # PARAMS
-    MIN_HORIZONTAL_LINES = 3
-    MIN_VERTICAL_LINES = 2
+    MIN_HORIZONTAL_LINES = 1
+    MIN_VERTICAL_LINES = 1
     LINE_MINIMAL_WIDTH = 140
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT = 130
 
     # Crop image
-    width, height, _ = img.shape
+    height, width, _ = img.shape
+    print(f"Image shape is {img.shape}")
 
     # Perform the detection in the main function
     combined_grid, contours_v, contours_h = core_line_detection(img)
@@ -280,6 +298,8 @@ def detect_table_from_image_data(img: np.ndarray):
     cv2.drawContours(mask, contours_h, -1, (255), cv2.FILLED)
     cv2.drawContours(mask, contours_v, -1, (255), cv2.FILLED)
     img_grid = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
+    for cnt in contours_v:
+        print(f"final v lines : {cv2.boundingRect(cnt)[0]}")
 
     # Find all the bounding boxes around group of lines
     # Find the bounding boxes of the tables
@@ -303,7 +323,11 @@ def detect_table_from_image_data(img: np.ndarray):
             center_y = ly + lh // 2
 
             # Check if the line's center is inside the table's box
-            if (bx < center_x < bx + bw) and (by < center_y < by + bh):
+            if (
+                (bx < center_x < bx + bw)
+                and (by < center_y < by + bh)
+                and (by + 15 < ly < by + bh - 15)
+            ):
                 h_count += 1
 
         # Check vertical lines
@@ -319,6 +343,7 @@ def detect_table_from_image_data(img: np.ndarray):
                 (bx < center_x < bx + bw)
                 and (by < center_y < by + bh)
                 and (lh / bh > 0.5)
+                and (bx + 15 < lx < bx + bw - 15)
             ):
                 v_count += 1
         if (h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES) or (
