@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     elif inut_data_path.name.startswith("F2024"):
         # 2024
-        parserImages.crop_all_images(top=120, left=80, right=80, bottom=100)
+        parserImages.crop_all_images(top=110, left=70, right=70, bottom=90)
         parserImages.adjust_all_images_rotations_parallel()
 
     window_name = ""

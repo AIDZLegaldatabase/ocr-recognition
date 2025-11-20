@@ -254,6 +254,7 @@ def detect_table_from_image_data(img: np.ndarray):
     LINE_MINIMAL_WIDTH = 140
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT = 130
+    IMAGE_BORDERS_CROP_TOLERANCE = 5
 
     # Crop image
     width, height, _ = img.shape
@@ -265,11 +266,25 @@ def detect_table_from_image_data(img: np.ndarray):
 
     # Filter lines by size:
     contours_h = [
-        cnt for cnt in contours_h if cv2.boundingRect(cnt)[2] > LINE_MINIMAL_WIDTH
+        cnt
+        for cnt in contours_h
+        if (
+            cv2.boundingRect(cnt)[2] > LINE_MINIMAL_WIDTH
+            and IMAGE_BORDERS_CROP_TOLERANCE
+            < cv2.boundingRect(cnt)[1]
+            < (width - IMAGE_BORDERS_CROP_TOLERANCE)
+        )
     ]
 
     contours_v = [
-        cnt for cnt in contours_v if cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT
+        cnt
+        for cnt in contours_v
+        if (
+            cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT
+            and IMAGE_BORDERS_CROP_TOLERANCE
+            < cv2.boundingRect(cnt)[0]
+            < (height - IMAGE_BORDERS_CROP_TOLERANCE)
+        )
     ]
 
     # Remove central line from vertical lines
