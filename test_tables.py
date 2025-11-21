@@ -6,7 +6,9 @@ from classes.pdf_parser import JoradpFileParse
 from pathlib import Path
 
 # cases 1 python .\test_tables.py -d -input_pdf_file ./data_test/F1962008.pdf
-# cases 2 python .\test_tables.py -d -input_pdf_file ./data_test/2024/F2024007.pdf
+# cases 2 python .\test_tables.py -d -input_pdf_file ./data_test/F2024007.pdf
+# cases 3 python .\test_tables.py -d -input_pdf_file ./data_test/F2025009.pdf
+
 def args_parser():
     parser = argparse.ArgumentParser(prog="Table detection tester")
 
@@ -30,9 +32,12 @@ if __name__ == "__main__":
     if inut_data_path.name.startswith("F1978"):
         # 1978
         parserImages.crop_all_images(top=85, left=0, right=0, bottom=15)
-    if inut_data_path.name.startswith("F1962"):
+    elif inut_data_path.name.startswith("F1962"):
         # 1978
         parserImages.crop_all_images(top=85, left=0, right=0, bottom=15)
+    elif inut_data_path.name.startswith("F2025"):
+        parserImages.crop_all_images(top=110, left=70, right=70, bottom=90)
+        # parserImages.adjust_all_images_rotations_parallel()
 
     elif inut_data_path.name.startswith("F2024"):
         # 2024
