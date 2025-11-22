@@ -4,6 +4,7 @@ from table_detection import detect_table_from_image_data
 import argparse
 from classes.pdf_parser import JoradpFileParse
 from pathlib import Path
+import re
 
 # cases 1 python .\test_tables.py -d -input_pdf_file ./data_test/F1962008.pdf
 # cases 2 python .\test_tables.py -d -input_pdf_file ./data_test/F2024007.pdf
@@ -14,20 +15,47 @@ def args_parser():
 
     parser.add_argument("-d", "--debug_mode", action="store_true")
     parser.add_argument("-input_pdf_file", type=str, default="")
+    parser.add_argument("-input_pdf_dir", type=str, default="")
 
     return parser.parse_args()
 
+def get_formatted_pdfs(folder_path):
+    """
+    Scans a folder for PDF files matching the pattern Fxxxxxxx.pdf
+    (Where 'x' represents exactly 7 digits).
+    """
+    folder = Path(folder_path)
+    
+    # Regex explanation:
+    # ^      : Start of string
+    # F      : Literal character 'F'
+    # \d{7}  : Exactly 7 digits (0-9)
+    # \.pdf$ : Ends with literal .pdf
+    pattern = re.compile(r"^F\d{7}\.pdf$")
+    
+    matching_files = []
+    
+    # robust check to ensure folder exists
+    if not folder.exists():
+        return []
 
-if __name__ == "__main__":
-    args = args_parser()
+    for file_path in folder.iterdir():
+        if file_path.is_file() and pattern.match(file_path.name):
+            # Returns the full path string. Change to file_path.name if you just want filenames.
+            matching_files.append(str(file_path))
+        
+    return matching_files
 
-    parserImages = JoradpFileParse(args.input_pdf_file)
+def parse_images(pdf_path):
+    parserImages = JoradpFileParse(pdf_path)
+    
+    
     parserImages.get_images_with_pymupdf()
     parserImages.resize_image_to_fit_ocr()
 
     print(f"Parsed {len(parserImages.images)} images from the PDF file")
 
-    inut_data_path = Path(args.input_pdf_file)
+    inut_data_path = Path(pdf_path)
 
     if inut_data_path.name.startswith("F1978"):
         # 1978
@@ -43,6 +71,21 @@ if __name__ == "__main__":
         # 2024
         parserImages.crop_all_images(top=110, left=70, right=70, bottom=90)
         parserImages.adjust_all_images_rotations_parallel()
+    else:
+        raise ValueError("There was no crop with this pdf file, are you sure about that?")
+    return parserImages.images[1:]
+    
+
+if __name__ == "__main__":
+    args = args_parser()
+    image_to_process = []
+
+    if args.input_pdf_dir != "":
+        pdf_files_list = get_formatted_pdfs(args.input_pdf_dir)
+        for pdf_path in pdf_files_list:
+            image_to_process.extend(parse_images(pdf_path))
+    elif args.input_pdf_file != "":
+        image_to_process = parse_images(args.input_pdf_file)
 
     window_name = ""
     if args.debug_mode:
@@ -52,10 +95,7 @@ if __name__ == "__main__":
 
     print("\n--- Analyzing Extracted Pages ---")
 
-    for i, pil_page_image in enumerate(parserImages.images):
-
-        if i == 0:
-            continue
+    for i, pil_page_image in enumerate(image_to_process):
         # 1. Convert PIL Image (assuming RGB) to OpenCV format (BGR)
         page_image_rgb = np.array(pil_page_image)
 
