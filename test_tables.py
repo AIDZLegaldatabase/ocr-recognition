@@ -108,7 +108,6 @@ if __name__ == "__main__":
             # 3. Draw the boxes
             for x, y, w, h in table_boxes:
                 cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3)
-                print(str(((x, y), (x + w, y + h))))
 
             print(f"--- Page {i+1}: Table(s) detected! ---")
 

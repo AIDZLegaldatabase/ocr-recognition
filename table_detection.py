@@ -151,16 +151,17 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img):
+
+def core_line_detection(img, kernel_size, invert_line_ratio):
     SOBEL_PIXEL_INTENSITY_THRESHOLD = 200
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # 1. Apply Sobel operators
-    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=kernel_size)
     abs_sobel_x = np.absolute(sobel_x)
 
-    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
+    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=kernel_size)
     abs_sobel_y = np.absolute(sobel_y)
 
     # 2. Threshold
@@ -172,10 +173,10 @@ def core_line_detection(img):
     )
 
     # 3. Morphological Operations
-    horizontal_kernel_len = int(gray.shape[1] / 20)
+    horizontal_kernel_len = int(gray.shape[1] / invert_line_ratio)
     hor_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_len, 1))
 
-    vertical_kernel_len = int(gray.shape[0] / 20)
+    vertical_kernel_len = int(gray.shape[0] / invert_line_ratio)
     ver_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_len))
 
     morphed_horizontal = cv2.morphologyEx(
@@ -208,7 +209,6 @@ def filter_central_v_line(contours_v, img_width):
         gap_threshold=CLSUTERS_GAP_THRESHOLD,
         min_cluster_size=1,
     )
-
 
     # Find the cluster of lines in the middle of the page:
     centre_lines_coordinates_x = [
@@ -255,9 +255,6 @@ def detect_table_from_image_data(img: np.ndarray):
 
     Args:
         img: A NumPy array (OpenCV image)
-
-    Returns:
-        True if a table is likely present, False otherwise.
     """
     if img is None:
         print("Error: Invalid image data.")
@@ -268,14 +265,13 @@ def detect_table_from_image_data(img: np.ndarray):
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT_RATIO = 0.087
     LINE_MINIMAL_WIDTH_RATIO = 0.137
-    IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO = 0.0048    
+    IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO = 0.0048
     IMAGE_Y_BORDERS_CROP_TOLERANCE_RATIO = 0.003
 
-    # Crop image
     image_height, image_width, _ = img.shape
 
     # Perform the detection in the main function
-    combined_grid, contours_v, contours_h = core_line_detection(img)
+    combined_grid, contours_v, contours_h = core_line_detection(img, 5, 20)
 
     # Validate number of countours
 
@@ -362,3 +358,15 @@ def detect_table_from_image_data(img: np.ndarray):
             filtered_boxes.append(bbox)
 
     return filtered_boxes, img_grid
+
+
+def detect_table_bboxes(image, table_bbox):
+    np_img = np.array(image)
+    # Do the processing only inside the table
+    np_img_cropped = np_img[
+        table_bbox[0] : table_bbox[0] + table_bbox[3],
+        table_bbox[1] : table_bbox[1] + table_bbox[2],
+        :,
+    ]
+
+    combined_grid, contours_v, contours_h = core_line_detection(np_img_cropped)
