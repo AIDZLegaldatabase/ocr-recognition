@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from table_detection import detect_table_from_image_data
+from table_detection import detect_table_from_image_data, detect_table_cells
 import argparse
 from classes.pdf_parser import JoradpFileParse
 from pathlib import Path
@@ -104,11 +104,24 @@ if __name__ == "__main__":
 
         # Create a copy of the image to draw on
         debug_image = page_image_rgb
-        if table_boxes:
-            # 3. Draw the boxes
-            for x, y, w, h in table_boxes:
-                cv2.rectangle(debug_image, (x, y), (x + w, y + h), (0, 0, 255), 3)
-                print(str(((x, y), (x + w, y + h))))
+        for table in table_boxes:
+            cv2.rectangle(
+                    debug_image,
+                    (table[0], table[1]),
+                    (table[0] + table[2], table[1] + table[3]),
+                    (0, 255, 0),
+                    3,
+                )
+            # 3. Detect cells in each table
+            table_bboxes = detect_table_cells(page_image_rgb, table)
+            for cell in table_bboxes:
+                cv2.rectangle(
+                    debug_image,
+                    (cell[0], cell[1]),
+                    (cell[0] + cell[2], cell[1] + cell[3]),
+                    (0, 0, 255),
+                    3,
+                )
 
             print(f"--- Page {i+1}: Table(s) detected! ---")
 

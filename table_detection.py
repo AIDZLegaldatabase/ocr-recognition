@@ -151,16 +151,27 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img):
+def core_line_detection(img, kernel_size, invert_line_ratio, close_gaps= False):
+    """_summary_
+
+    Args:
+        img (_type_): _description_
+        kernel_size (_type_): _description_
+        invert_line_ratio (_type_): _description_
+        close_gaps (bool): only use when detecting cells
+
+    Returns:
+        _type_: _description_
+    """
     SOBEL_PIXEL_INTENSITY_THRESHOLD = 200
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # 1. Apply Sobel operators
-    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=5)
+    sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=kernel_size)
     abs_sobel_x = np.absolute(sobel_x)
 
-    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=5)
+    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=kernel_size)
     abs_sobel_y = np.absolute(sobel_y)
 
     # 2. Threshold
@@ -172,10 +183,10 @@ def core_line_detection(img):
     )
 
     # 3. Morphological Operations
-    horizontal_kernel_len = int(gray.shape[1] / 20)
+    horizontal_kernel_len = int(gray.shape[1] / invert_line_ratio)
     hor_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_len, 1))
 
-    vertical_kernel_len = int(gray.shape[0] / 20)
+    vertical_kernel_len = int(gray.shape[0] / invert_line_ratio)
     ver_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_len))
 
     morphed_horizontal = cv2.morphologyEx(
@@ -184,12 +195,26 @@ def core_line_detection(img):
     morphed_vertical = cv2.morphologyEx(
         thresh_x.astype(np.uint8), cv2.MORPH_OPEN, ver_kernel
     )
+    if close_gaps:
+        kernel_size = (10, 10)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+        # "Closing" = Dilate (thicken) then Erode (thin)
+        # This fills gaps and connects nearby lines.
+        morphed_vertical = cv2.morphologyEx(
+            morphed_vertical, cv2.MORPH_CLOSE, kernel
+        )
+
+        # "Closing" = Dilate (thicken) then Erode (thin)
+        # This fills gaps and connects nearby lines.
+        morphed_horizontal = cv2.morphologyEx(
+            morphed_horizontal, cv2.MORPH_CLOSE, kernel
+    )
 
     # Find contours (i.e., distinct lines) in the horizontal image
     contours_h, _ = cv2.findContours(
         morphed_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-
     # Find contours (i.e., distinct lines) in the vertical image
     contours_v, _ = cv2.findContours(
         morphed_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -208,7 +233,6 @@ def filter_central_v_line(contours_v, img_width):
         gap_threshold=CLSUTERS_GAP_THRESHOLD,
         min_cluster_size=1,
     )
-
 
     # Find the cluster of lines in the middle of the page:
     centre_lines_coordinates_x = [
@@ -255,9 +279,6 @@ def detect_table_from_image_data(img: np.ndarray):
 
     Args:
         img: A NumPy array (OpenCV image)
-
-    Returns:
-        True if a table is likely present, False otherwise.
     """
     if img is None:
         print("Error: Invalid image data.")
@@ -268,14 +289,13 @@ def detect_table_from_image_data(img: np.ndarray):
     NUM_TOTAL_LINES = 4
     LINE_MINIMAL_HEIGHT_RATIO = 0.087
     LINE_MINIMAL_WIDTH_RATIO = 0.137
-    IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO = 0.0048    
+    IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO = 0.0048
     IMAGE_Y_BORDERS_CROP_TOLERANCE_RATIO = 0.003
 
-    # Crop image
     image_height, image_width, _ = img.shape
 
     # Perform the detection in the main function
-    combined_grid, contours_v, contours_h = core_line_detection(img)
+    combined_grid, contours_v, contours_h = core_line_detection(img, 5, 20)
 
     # Validate number of countours
 
@@ -362,3 +382,165 @@ def detect_table_from_image_data(img: np.ndarray):
             filtered_boxes.append(bbox)
 
     return filtered_boxes, img_grid
+
+
+def find_clusters_1d_arrays(
+    lines_data, gap_threshold: float, min_cluster_size: int = 1, axis: int = 0
+):
+    """
+    Finds clusters in a 1D list of numbers based on a simple
+    gap threshold.
+
+    Args:
+        data: A list oflines list.
+        gap_threshold: The maximum gap to allow *inside* a cluster.
+        min_cluster_size: The minimum number of items to be
+                          considered a "real" cluster.
+        axis,: clustering axis, 0 for X axis and 1 for Y axis
+
+    Returns:
+        A dictionary where keys are cluster IDs (0, 1, 2...)
+        and values are the lists of numbers in that cluster.
+    """
+
+    data = [line[axis] for line in lines_data]
+    if not data:
+        return {}
+
+    # Step 1: Sort the data
+    data.sort()
+
+    clusters = {}
+    current_cluster_id = 0
+    current_cluster = [lines_data[0]]
+
+    # Step 2 & 3: Iterate and find gaps
+    for i in range(len(data) - 1):
+        # Calculate the gap
+        gap = data[i + 1] - data[i]
+
+        if gap > gap_threshold:
+            # "Break" - end the current cluster and start a new one
+            clusters[current_cluster_id] = current_cluster
+            current_cluster_id += 1
+            current_cluster = [lines_data[i + 1]]
+        else:
+            # "No break" - add to the current cluster
+            current_cluster.append(lines_data[i + 1])
+
+    # Add the last cluster
+    clusters[current_cluster_id] = current_cluster
+    final_clusters = clusters
+
+    return final_clusters
+
+
+def display_lines(lines, image):
+    # Create new image with combined grids
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    for line in lines:
+        cv2.rectangle(
+            mask,
+            (round(line[0]), round(line[1])),
+            (round(line[2]), round(line[3])),
+            255,
+            -1,
+        )
+
+    return mask
+
+
+def detect_table_cells(image, table_bbox):
+    table_x_start = table_bbox[0]
+    table_y_start = table_bbox[1]
+    table_x_end = table_bbox[0] + table_bbox[2]
+    table_y_end = table_bbox[1] + table_bbox[3]
+    left_line = (0, 0, 5, table_bbox[3])
+    top_line = (0, 0, table_bbox[2], 5)
+    right_line = (table_bbox[2] - 10, 0, 5, table_bbox[3])
+    bottom_line = (0, table_bbox[3] - 10, table_bbox[2], 5)
+
+    np_img = np.array(image)
+    # Do the processing only inside the table
+    np_img_cropped = np_img[
+        table_y_start:table_y_end,
+        table_x_start:table_x_end,
+        :,
+    ]
+
+    combined_grid, contours_v, contours_h = core_line_detection(np_img_cropped, 3, 10, True)
+
+    vertical_lines = [cv2.boundingRect(cnt) for cnt in contours_v]
+
+    horizontal_lines = [cv2.boundingRect(cnt) for cnt in contours_h]
+
+    vertical_lines.sort(key=lambda c: c[0])
+    horizontal_lines.sort(key=lambda c: c[1])
+
+    # Add all surrounding lines
+    vertical_lines.insert(0, left_line)
+    horizontal_lines.insert(0, top_line)
+    vertical_lines.insert(-1, right_line)
+    horizontal_lines.insert(-1, bottom_line)
+
+    ## Step 2
+
+    def remove_line_duplicates(line_clusters, axis):
+        secondary_axis = (axis + 1) % 2
+        for cluster_key in line_clusters.keys():
+
+            prev_line = line_clusters[cluster_key][0]
+            filtered_lines = [line_clusters[cluster_key][0]]
+            for line in line_clusters[cluster_key]:
+                # Only remove lines that have the same starting point
+                if abs(line[secondary_axis] - prev_line[secondary_axis]) > 10:
+                    filtered_lines.append(line)
+
+                prev_line = line
+            line_clusters[cluster_key] = filtered_lines
+
+    # Remove duplicate lines:
+    vertical_clusters = find_clusters_1d_arrays(vertical_lines, 0.05 * table_bbox[3])
+    horizontal_clusters = find_clusters_1d_arrays(
+        horizontal_lines, 0.05 * table_bbox[2], 1, 1
+    )
+
+    remove_line_duplicates(vertical_clusters, 0)
+    remove_line_duplicates(horizontal_clusters, 1)
+
+    new_lines = [
+        (line[0][0], line[0][1], line[0][0] + line[0][2], line[0][1] + line[0][3])
+        for _, line in vertical_clusters.items()
+    ]
+
+    for _, lines in horizontal_clusters.items():
+        for line in lines:
+            new_lines.append((line[0], line[1], line[0] + line[2], line[1] + line[3]))
+
+    new_lines_img = display_lines(new_lines, np_img_cropped)
+
+    # 1. Combine the horizontal and vertical line images
+    # table_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
+
+    # 2. Morphological Close ("Smear" the lines together)
+    # This is the most important parameter to tune.
+    # (15, 15) means it will connect lines that are up to 15px apart.
+    kernel_size = (25, 25)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+    # "Closing" = Dilate (thicken) then Erode (thin)
+    # This fills gaps and connects nearby lines.
+    closed_grid = cv2.morphologyEx(new_lines_img, cv2.MORPH_CLOSE, kernel)
+
+    contours, hierarchy = cv2.findContours(
+        closed_grid, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
+    )
+    table_bounding_boxes = []
+    for cnt in contours:
+        # 4. Get the bounding box for each blob
+        bbox = cv2.boundingRect(cnt)
+        if bbox[2] < table_bbox[2] * 0.9 or bbox[3] < table_bbox[3] * 0.95:
+            table_bounding_boxes.append(
+                [bbox[0] + table_bbox[0], bbox[1] + table_bbox[1], bbox[2], bbox[3]]
+            )
+    return table_bounding_boxes
