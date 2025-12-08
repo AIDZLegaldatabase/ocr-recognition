@@ -185,18 +185,29 @@ def core_line_detection(img, kernel_size, invert_line_ratio):
     morphed_vertical = cv2.morphologyEx(
         thresh_x.astype(np.uint8), cv2.MORPH_OPEN, ver_kernel
     )
+    
+    kernel_size = (10, 10)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+    # "Closing" = Dilate (thicken) then Erode (thin)
+    # This fills gaps and connects nearby lines.
+    morphed_vertical_closed = cv2.morphologyEx(morphed_vertical, cv2.MORPH_CLOSE, kernel)
+    
+    # "Closing" = Dilate (thicken) then Erode (thin)
+    # This fills gaps and connects nearby lines.
+    morphed_horizontal_closed = cv2.morphologyEx(morphed_horizontal, cv2.MORPH_CLOSE, kernel)
+
 
     # Find contours (i.e., distinct lines) in the horizontal image
     contours_h, _ = cv2.findContours(
-        morphed_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        morphed_horizontal_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
-
     # Find contours (i.e., distinct lines) in the vertical image
     contours_v, _ = cv2.findContours(
-        morphed_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        morphed_vertical_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
+    combined_grid = cv2.bitwise_or(morphed_horizontal_closed, morphed_vertical_closed)
 
     return combined_grid, contours_v, contours_h
 
