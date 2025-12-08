@@ -151,7 +151,18 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img, kernel_size, invert_line_ratio):
+def core_line_detection(img, kernel_size, invert_line_ratio, close_gaps= False):
+    """_summary_
+
+    Args:
+        img (_type_): _description_
+        kernel_size (_type_): _description_
+        invert_line_ratio (_type_): _description_
+        close_gaps (bool): only use when detecting cells
+
+    Returns:
+        _type_: _description_
+    """
     SOBEL_PIXEL_INTENSITY_THRESHOLD = 200
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -184,32 +195,32 @@ def core_line_detection(img, kernel_size, invert_line_ratio):
     morphed_vertical = cv2.morphologyEx(
         thresh_x.astype(np.uint8), cv2.MORPH_OPEN, ver_kernel
     )
+    if close_gaps:
+        kernel_size = (10, 10)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
-    kernel_size = (10, 10)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+        # "Closing" = Dilate (thicken) then Erode (thin)
+        # This fills gaps and connects nearby lines.
+        morphed_vertical = cv2.morphologyEx(
+            morphed_vertical, cv2.MORPH_CLOSE, kernel
+        )
 
-    # "Closing" = Dilate (thicken) then Erode (thin)
-    # This fills gaps and connects nearby lines.
-    morphed_vertical_closed = cv2.morphologyEx(
-        morphed_vertical, cv2.MORPH_CLOSE, kernel
-    )
-
-    # "Closing" = Dilate (thicken) then Erode (thin)
-    # This fills gaps and connects nearby lines.
-    morphed_horizontal_closed = cv2.morphologyEx(
-        morphed_horizontal, cv2.MORPH_CLOSE, kernel
+        # "Closing" = Dilate (thicken) then Erode (thin)
+        # This fills gaps and connects nearby lines.
+        morphed_horizontal = cv2.morphologyEx(
+            morphed_horizontal, cv2.MORPH_CLOSE, kernel
     )
 
     # Find contours (i.e., distinct lines) in the horizontal image
     contours_h, _ = cv2.findContours(
-        morphed_horizontal_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        morphed_horizontal, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
     # Find contours (i.e., distinct lines) in the vertical image
     contours_v, _ = cv2.findContours(
-        morphed_vertical_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        morphed_vertical, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
-    combined_grid = cv2.bitwise_or(morphed_horizontal_closed, morphed_vertical_closed)
+    combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
     return combined_grid, contours_v, contours_h
 
@@ -457,7 +468,7 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    combined_grid, contours_v, contours_h = core_line_detection(np_img_cropped, 3, 10)
+    combined_grid, contours_v, contours_h = core_line_detection(np_img_cropped, 3, 10, True)
 
     vertical_lines = [cv2.boundingRect(cnt) for cnt in contours_v]
 
