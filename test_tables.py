@@ -239,11 +239,6 @@ if __name__ == "__main__":
             page_idx_str = str(i)
             page_gt = ground_truth.get(page_idx_str, {"tables": []})
             gt_tables = page_gt["tables"]
-            ## Draw GT in GREEN in the debug image
-            # for tbl in gt_tables:
-            #    gx, gy, gw, gh = tbl["bbox"]
-            #    cv2.rectangle(debug_image, (gx, gy), (gx+gw, gy+gh), (0, 255, 0), 2)
-            #    cv2.putText(debug_image, "GT", (gx, gy-5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
             matched_table_indices = set()
             failed_table_detection = False
@@ -383,7 +378,7 @@ if __name__ == "__main__":
                 failed_table_detection or failed_cell_detection
             ):
                 reporter.add_failure(
-                    i,
+                    i + 2,
                     test_file,
                     debug_image,
                     f"Failed table detection: {failed_table_detection}. Failed Cell detection: {failed_cell_detection}",
