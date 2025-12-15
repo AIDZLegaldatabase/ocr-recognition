@@ -14,3 +14,6 @@ easyocr==1.7.2
 tqdm
 scikit-learn
 opencv-python
+PyQt5==5.15.11
+glog
+jinja2

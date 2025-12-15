@@ -58,53 +58,6 @@ def find_clusters_1d(
     return final_clusters
 
 
-def find_inferred_boxes(
-    contours_v: list, image_height: int, height_threshold_ratio: float = 0.95
-):
-    """
-    Finds table boxes by inferring them from parallel, full-height
-    vertical lines. This handles cases where top/bottom lines are cropped.
-
-    Args:
-        contours_v: The list of vertical line contours.
-        image_height: The height of the image.
-        height_threshold_ratio: What percentage of the total height
-                                a line must be to be considered "full-height".
-
-    Returns:
-        A list of inferred bounding box tuples (x, y, w, h).
-    """
-
-    full_height_line_x_coords = []
-
-    # 1. Find all "full-height" vertical lines
-    for cnt in contours_v:
-        (lx, ly, lw, lh) = cv2.boundingRect(cnt)
-
-        # Check if the line's height is >= 95% of the image height
-        if lh >= (image_height * height_threshold_ratio):
-            full_height_line_x_coords.append(lx)
-
-    # 2. Sort the x-coordinates
-    full_height_line_x_coords.sort()
-
-    # 3. Pair up adjacent lines to form boxes
-    inferred_boxes = []
-    if len(full_height_line_x_coords) >= 2:
-        for i in range(len(full_height_line_x_coords) - 1):
-            x1 = full_height_line_x_coords[i]
-            x2 = full_height_line_x_coords[i + 1]
-
-            # Create the full-height bounding box
-            x = x1
-            y = 0
-            w = x2 - x1
-            h = image_height
-
-            inferred_boxes.append((x, y, w, h))
-
-    return inferred_boxes
-
 
 def find_table_bounding_boxes(table_grid):
     """
