@@ -258,9 +258,10 @@ if __name__ == "__main__":
 
                 # Check Table Match
                 if best_table_iou < 0.5:  # Threshold
-                    log.error(
-                        f"Page {i} from file {test_file}: False Positive Table detected at {p_table}"
-                    )
+                    if args.generate_report:
+                        log.error(
+                            f"Page {i} from file {test_file}: False Positive Table detected at {p_table}"
+                        )
                     table_fp += 1
                     cv2.rectangle(
                         debug_image,
@@ -272,9 +273,10 @@ if __name__ == "__main__":
                     failed_table_detection = True
                     continue  # Skip cell check for invalid table
                 else:
-                    log.info(
-                        f"Page {i} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
-                    )
+                    if args.generate_report:
+                        log.info(
+                            f"Page {i} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
+                        )
                     table_tp += 1
                     matched_table_indices.add(best_table_gt_idx)
                     # print green (good) prediction
@@ -318,9 +320,10 @@ if __name__ == "__main__":
 
                         # Check Cell Match
                         if best_cell_iou < 0.5:  # Threshold
-                            log.error(
-                                f"Page {i} from file {test_file}: False Positive Cell detected at {p_cell}"
-                            )
+                            if args.generate_report:
+                                log.error(
+                                    f"Page {i} from file {test_file}: False Positive Cell detected at {p_cell}"
+                                )
                             cell_fp += 1
                             cv2.rectangle(
                                 debug_image,
@@ -331,9 +334,10 @@ if __name__ == "__main__":
                             )  # Red for Fail cell
                             failed_cell_detection = True
                         else:
-                            log.info(
-                                f"Page {i} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
-                            )
+                            if args.generate_report:
+                                log.info(
+                                    f"Page {i} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
+                                )
                             cell_tp += 1
                             matched_cell_indices.add(best_cell_gt_idx)
                             cv2.rectangle(
@@ -348,9 +352,10 @@ if __name__ == "__main__":
                     for g_cell_idx, g_cell in enumerate(gt_cells):
                         if g_cell_idx not in matched_cell_indices:
                             g_cell_x, g_cell_y, g_cell_w, g_cell_h = g_cell
-                            log.error(
-                                f"Page {i} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
-                            )
+                            if args.generate_report:
+                                log.error(
+                                    f"Page {i} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
+                                )
                             cell_fn += 1
                             cv2.rectangle(
                                 debug_image,
@@ -365,9 +370,10 @@ if __name__ == "__main__":
             for g_idx, g_tbl in enumerate(gt_tables):
                 if g_idx not in matched_table_indices:
                     gx, gy, gw, gh = g_tbl["bbox"]
-                    log.error(
-                        f"Page {i} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
-                    )
+                    if args.generate_report:
+                        log.error(
+                            f"Page {i} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
+                        )
                     table_fn += 1
                     cv2.rectangle(
                         debug_image, (gx, gy), (gx + gw, gy + gh), (255, 0, 255), 3
