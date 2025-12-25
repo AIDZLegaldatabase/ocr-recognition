@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import cv2
 import numpy as np
 from typing import List, Dict
@@ -58,7 +59,6 @@ def find_clusters_1d(
     return final_clusters
 
 
-
 def find_table_bounding_boxes(table_grid):
     """
     Finds the bounding boxes of tables by "smearing" (closing)
@@ -104,13 +104,13 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img, kernel_size, invert_line_ratio, close_gaps=False):
+def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
     """_summary_
 
     Args:
         img (_type_): _description_
         kernel_size (_type_): _description_
-        invert_line_ratio (_type_): _description_
+        min_line_ratio (_type_): Anything shorter than min_line_ratio% of the image width is noise
         close_gaps (bool): only use when detecting cells
 
     Returns:
@@ -136,10 +136,10 @@ def core_line_detection(img, kernel_size, invert_line_ratio, close_gaps=False):
     )
 
     # 3. Morphological Operations
-    horizontal_kernel_len = int(gray.shape[1] / invert_line_ratio)
+    horizontal_kernel_len = int(gray.shape[1] * min_line_ratio)
     hor_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horizontal_kernel_len, 1))
 
-    vertical_kernel_len = int(gray.shape[0] / invert_line_ratio)
+    vertical_kernel_len = int(gray.shape[0] * min_line_ratio)
     ver_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_kernel_len))
 
     morphed_horizontal = cv2.morphologyEx(
@@ -173,14 +173,16 @@ def core_line_detection(img, kernel_size, invert_line_ratio, close_gaps=False):
 
     combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
-    return combined_grid, contours_v, contours_h
+    contours_v_lines = [TableLine(cnt) for cnt in contours_v]
+    contours_h_lines = [TableLine(cnt) for cnt in contours_h]
+    return combined_grid, contours_v_lines, contours_h_lines
 
 
 def filter_central_v_line(contours_v, img_width):
     CENTRE_LINE_TOLERANCE = 100
     CLSUTERS_GAP_THRESHOLD = 10
     vertical_lines_clusters = find_clusters_1d(
-        [cv2.boundingRect(cnt)[0] for cnt in contours_v],
+        [line.x for line in contours_v],
         gap_threshold=CLSUTERS_GAP_THRESHOLD,
         min_cluster_size=1,
     )
@@ -214,10 +216,9 @@ def filter_central_v_line(contours_v, img_width):
         contours_v
         if len(centre_lines_coordinates_x) == 0
         else [
-            cnt
-            for cnt in contours_v
-            if cv2.boundingRect(cnt)[0]
-            not in centre_lines_coordinates_x[idx_centre_lines]
+            line
+            for line in contours_v
+            if line.x not in centre_lines_coordinates_x[idx_centre_lines]
         ]
     )
 
@@ -226,7 +227,8 @@ def filter_central_v_line(contours_v, img_width):
 
 def detect_table_from_image_data(img: np.ndarray):
     """
-    Detects if an image's data (numpy array) contains a table.
+    Detect tables within an image, returning both a list of
+    table bounding boxes and a debug image
 
     Args:
         img: A NumPy array (OpenCV image)
@@ -242,48 +244,52 @@ def detect_table_from_image_data(img: np.ndarray):
     LINE_MINIMAL_WIDTH_RATIO = 0.137
     IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO = 0.0048
     IMAGE_Y_BORDERS_CROP_TOLERANCE_RATIO = 0.003
+    LINE_DETECTION_KERNEL_SIZE = 5
+    LINE_LENGTH_RATIO_MIN = 0.05
 
     image_height, image_width, _ = img.shape
 
     # Perform the detection in the main function
-    combined_grid, contours_v, contours_h = core_line_detection(img, 5, 20)
+    combined_grid, vertical_lines, horizontal_lines = core_line_detection(
+        img, LINE_DETECTION_KERNEL_SIZE, LINE_LENGTH_RATIO_MIN
+    )
 
     # Validate number of countours
 
     # Filter lines by size:
-    contours_h = [
-        cnt
-        for cnt in contours_h
+    horizontal_lines = [
+        line
+        for line in horizontal_lines
         if (
-            cv2.boundingRect(cnt)[2] > (LINE_MINIMAL_WIDTH_RATIO * image_width)
+            line.length > (LINE_MINIMAL_WIDTH_RATIO * image_width)
             and (IMAGE_Y_BORDERS_CROP_TOLERANCE_RATIO * image_height)
-            < cv2.boundingRect(cnt)[1]
+            < line.y
             < (image_height * (1 - IMAGE_Y_BORDERS_CROP_TOLERANCE_RATIO))
         )
     ]
 
-    contours_v = [
-        cnt
-        for cnt in contours_v
+    vertical_lines = [
+        line
+        for line in vertical_lines
         if (
-            cv2.boundingRect(cnt)[3] > LINE_MINIMAL_HEIGHT_RATIO
+            line.length > LINE_MINIMAL_HEIGHT_RATIO
             and (IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO * image_width)
-            < cv2.boundingRect(cnt)[0]
+            < line.x
             < (image_width * (1 - IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO))
         )
     ]
 
     # Remove central line from vertical lines
-    contours_v = filter_central_v_line(contours_v, image_width)
+    vertical_lines = filter_central_v_line(vertical_lines, image_width)
 
     # Create new image with combined grids
     mask = np.zeros(combined_grid.shape[:2], dtype=np.uint8)
-    cv2.drawContours(mask, contours_h, -1, (255), cv2.FILLED)
-    cv2.drawContours(mask, contours_v, -1, (255), cv2.FILLED)
+    for line in horizontal_lines:
+        cv2.drawContours(mask, [line.contour], -1, (255), cv2.FILLED)
+    for line in vertical_lines:
+        cv2.drawContours(mask, [line.contour], -1, (255), cv2.FILLED)
     img_grid = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
-
     # Find all the bounding boxes around group of lines
-    # Find the bounding boxes of the tables
     table_boxes = find_table_bounding_boxes(img_grid)
     filtered_boxes = []
 
@@ -295,36 +301,26 @@ def detect_table_from_image_data(img: np.ndarray):
         v_count = 0
 
         # Check horizontal lines
-        for cnt in contours_h:
-            # Get the bounding box of the line
-            (lx, ly, lw, lh) = cv2.boundingRect(cnt)
-
-            # Find the center of the line's bounding box
-            center_x = lx + lw // 2
-            center_y = ly + lh // 2
-
+        for line in horizontal_lines:
             # Check if the line's center is inside the table's box
             if (
-                (bx < center_x < bx + bw)
-                and (by < center_y < by + bh)
-                and (by + 15 < ly < by + bh - 15)
+                (bx < line.center < bx + bw)
+                and (by < line.y < by + bh)
+                and (by + 15 < line.y < by + bh - 15)
             ):
                 h_count += 1
 
         # Check vertical lines
-        for cnt in contours_v:
-            (lx, ly, lw, lh) = cv2.boundingRect(cnt)
-            center_x = lx + lw // 2
-            center_y = ly + lh // 2
+        for line in vertical_lines:
             # The last check is only done in vertical lines because they're continuous
             # usually so we can filter small vertical lines
             # TODO add similar check for verticals, you want to see if a line is floating and not connected anywhere
-            # when you're looking fir bboxes
+            # when you're looking for bboxes
             if (
-                (bx < center_x < bx + bw)
-                and (by < center_y < by + bh)
-                and (lh / bh > 0.5)
-                and (bx + 15 < lx < bx + bw - 15)
+                (bx < line.x < bx + bw)
+                and (by < line.center < by + bh)
+                and (line.length / bh > 0.5)
+                and (bx + 15 < line.x < bx + bw - 15)
             ):
                 v_count += 1
         if (h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES) or (
@@ -419,14 +415,10 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    combined_grid, contours_v, contours_h = core_line_detection(np_img_cropped, 3, 10)
+    combined_grid, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1)
 
-    vertical_lines = [cv2.boundingRect(cnt) for cnt in contours_v]
-
-    horizontal_lines = [cv2.boundingRect(cnt) for cnt in contours_h]
-
-    vertical_lines.sort(key=lambda c: c[0])
-    horizontal_lines.sort(key=lambda c: c[1])
+    vertical_lines.sort(key=lambda line: line.x)
+    horizontal_lines.sort(key=lambda line: line.y)
 
     # Add all surrounding lines
     vertical_lines.insert(0, left_line)
@@ -473,7 +465,7 @@ def detect_table_cells(image, table_bbox):
                 continue
             current_min = min(abs(prev_line[0][1] - line[0][1]), current_min)
             prev_line = line
-        if (current_min <= 5):
+        if current_min <= 5:
             current_min = 10
         return current_min
 
@@ -523,10 +515,82 @@ def detect_table_cells(image, table_bbox):
     for cnt in contours:
         # 4. Get the bounding box for each blob
         bbox = cv2.boundingRect(cnt)
-        if (bbox[3]/table_bbox[3] < 0.02 or bbox[2]/table_bbox[2] < 0.02):
+        if bbox[3] / table_bbox[3] < 0.02 or bbox[2] / table_bbox[2] < 0.02:
             continue
         if bbox[2] < table_bbox[2] * 0.95 or bbox[3] < table_bbox[3] * 0.95:
             table_bounding_boxes.append(
                 [bbox[0] + table_bbox[0], bbox[1] + table_bbox[1], bbox[2], bbox[3]]
             )
     return table_bounding_boxes
+
+
+@dataclass
+class TableCell:
+    bbox: List[float]
+
+    @property
+    def x(self):
+        return self.box[0]
+
+    @property
+    def y(self):
+        return self.box[1]
+
+    @property
+    def w(self):
+        return self.box[2]
+
+    @property
+    def h(self):
+        return self.box[3]
+
+    @property
+    def center_y(self):
+        return (self.box[1] + self.box[3]) / 2
+
+    @property
+    def center_x(self):
+        return (self.box[0] + self.box[2]) / 2
+
+
+@dataclass
+class TableLine:
+    bbox: List[float]
+    contour: List[float]
+
+    def __init__(self, contour):
+        self.contour = contour
+        self.bbox = cv2.boundingRect(contour)
+
+    @property
+    def x(self):
+        return self.bbox[0]
+
+    @property
+    def y(self):
+        return self.bbox[1]
+
+    @property
+    def length(self):
+        return self.bbox[2] if self.bbox[2] > self.bbox[3] else self.bbox[3]
+
+    def is_horizontal(self):
+        return self.bbox[2] > self.bbox[3]
+
+    def is_vertical(self):
+        return self.bbox[3] > self.bbox[2]
+
+    @property
+    def contours(self):
+        return self.contours
+
+    @property
+    def center(self):
+        if self.is_vertical():
+            return self.bbox[1] + self.bbox[3] // 2
+        elif self.is_horizontal():
+            return self.bbox[0] + self.bbox[2] // 2
+        else:
+            raise ValueError(
+                f"Bounding box for line is neither vertical or horizontal: {self.bbox}"
+            )
