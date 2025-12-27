@@ -408,6 +408,10 @@ if __name__ == "__main__":
     # Finalize
     if args.generate_report:
         reporter.show()
+    assert (table_tp + table_fp) > 0,  f"Sum of zeroes: {table_tp} + {table_fp}"
+    assert (table_tp + table_fn) > 0, f"Sum of zeroes: {table_tp} + {table_fn}"
+    assert (cell_tp + cell_fp) > 0, f"Sum of zeroes: {cell_tp} + {cell_fp}"
+    assert (cell_tp + cell_fn) > 0, f"Sum of zeroes: {cell_tp} + {cell_fn}"
     log.info(
         "Evaluation complete....\n"
         "Table Detection:\n "

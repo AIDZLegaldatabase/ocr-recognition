@@ -2,6 +2,75 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 from typing import List, Dict
+from itertools import chain
+import pprint
+
+
+@dataclass
+class TableLine:
+    bbox: List[float]
+    _contour: List[float]
+
+    def __init__(self, contour_or_bbox, init_from_bbox=False):
+        if init_from_bbox:
+            self._contour = []
+            self.bbox = contour_or_bbox
+        else:
+            self._contour = contour_or_bbox
+            self.bbox = cv2.boundingRect(contour_or_bbox)
+
+    @property
+    def x(self):
+        return self.bbox[0]
+
+    @property
+    def y(self):
+        return self.bbox[1]
+
+    @property
+    def length(self):
+        return self.bbox[2] if self.bbox[2] > self.bbox[3] else self.bbox[3]
+
+    def is_horizontal(self):
+        return self.bbox[2] > self.bbox[3]
+
+    def is_vertical(self):
+        return self.bbox[3] > self.bbox[2]
+
+    def has_contour(self):
+        return len(self.contour) > 0
+
+    @property
+    def contour(self):
+        return self._contour
+
+    def __repr__(self):
+        return pprint.pformat(self.bbox)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (
+                (self.x == other.x)
+                and (self.y == other.y)
+                and (self.length == other.length)
+                and (self.is_vertical() == other.is_vertical())
+                and (self.is_horizontal() == other.is_horizontal())
+            )
+        else:
+            raise TypeError(
+                f"unsupported operand type(s) for +: '{self.__class__}' and '{type(other)}'"
+            )
+
+    @property
+    def center(self):
+        if self.is_vertical():
+            return self.bbox[1] + self.bbox[3] // 2
+        elif self.is_horizontal():
+            return self.bbox[0] + self.bbox[2] // 2
+        else:
+            raise ValueError(
+                f"Bounding box for line is neither vertical or horizontal: {self.bbox}"
+            )
 
 
 def find_clusters_1d(
@@ -181,45 +250,32 @@ def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
 def filter_central_v_line(contours_v, img_width):
     CENTRE_LINE_TOLERANCE = 100
     CLSUTERS_GAP_THRESHOLD = 10
-    vertical_lines_clusters = find_clusters_1d(
-        [line.x for line in contours_v],
+    vertical_lines_clusters = find_lines_clusters(
+        contours_v,
         gap_threshold=CLSUTERS_GAP_THRESHOLD,
         min_cluster_size=1,
     )
 
     # Find the cluster of lines in the middle of the page:
-    centre_lines_coordinates_x = [
-        vertical_lines_clusters[x]
-        for x in vertical_lines_clusters.keys()
+    center_matching_clusters = [
+        vertical_lines_clusters[key]
+        for key in vertical_lines_clusters.keys()
         if all(
             (img_width / 2) - CENTRE_LINE_TOLERANCE
-            < elt
+            < elt.x
             < (img_width / 2) + CENTRE_LINE_TOLERANCE
-            for elt in vertical_lines_clusters[x]
+            for elt in vertical_lines_clusters[key]
         )
     ]
-    idx_centre_lines = 0
-    if len(centre_lines_coordinates_x) > 1:
-        mean_diff = []
-        for centre_line_cluster in centre_lines_coordinates_x:
-            mean_diff.append(
-                (
-                    sum([abs(x - img_width / 2) for x in centre_line_cluster])
-                    / len(centre_line_cluster)
-                )
-            )
-        idx_centre_lines = mean_diff.index(min(mean_diff))
+    # 2. Flatten them into one big list
+    centre_lines = list(chain.from_iterable(center_matching_clusters))
 
     # If there's a central cluster then ommit any line item which has the x of
-    # the bounding box in the list of cenytre lines coordinates
+    # the bounding box in the list of centre lines coordinates
     contours_v_without_central = (
         contours_v
-        if len(centre_lines_coordinates_x) == 0
-        else [
-            line
-            for line in contours_v
-            if line.x not in centre_lines_coordinates_x[idx_centre_lines]
-        ]
+        if len(centre_lines) == 0
+        else [line for line in contours_v if line not in centre_lines]
     )
 
     return contours_v_without_central
@@ -331,49 +387,55 @@ def detect_table_from_image_data(img: np.ndarray):
     return filtered_boxes, img_grid
 
 
-def find_clusters_1d_arrays(
-    lines_data, gap_threshold: float, min_cluster_size: int = 1, axis: int = 0
+def find_lines_clusters(
+    data: List[TableLine], gap_threshold: float, min_cluster_size: int = 1
 ):
     """
-    Finds clusters in a 1D list of numbers based on a simple
+    Finds clusters in a list of lines based on a simple
     gap threshold.
 
     Args:
-        data: A list oflines list.
+        data: A list of sorted lines list.
         gap_threshold: The maximum gap to allow *inside* a cluster.
         min_cluster_size: The minimum number of items to be
                           considered a "real" cluster.
-        axis,: clustering axis, 0 for X axis and 1 for Y axis
 
     Returns:
         A dictionary where keys are cluster IDs (0, 1, 2...)
         and values are the lists of numbers in that cluster.
     """
-
-    data = [line[axis] for line in lines_data]
     if not data:
         return {}
 
-    # Step 1: Sort the data
-    data.sort()
+    # Sort the data, infer all the lines orientation by using the first one
+    # TODO: Verify this assumption
+    if data[0].is_vertical():
+        data.sort(key=lambda line: line.x)
+    elif data[0].is_horizontal():
+        data.sort(key=lambda line: line.y)
 
     clusters = {}
     current_cluster_id = 0
-    current_cluster = [lines_data[0]]
+    current_cluster = [data[0]]
 
     # Step 2 & 3: Iterate and find gaps
     for i in range(len(data) - 1):
         # Calculate the gap
-        gap = data[i + 1] - data[i]
+        if data[i].is_vertical():
+            gap = data[i + 1].x - data[i].x
+        elif data[i].is_horizontal():
+            gap = data[i + 1].y - data[i].y
+        else:
+            raise ValueError(f"Line not horizontal or vertical: {data[i]}")
 
         if gap > gap_threshold:
             # "Break" - end the current cluster and start a new one
             clusters[current_cluster_id] = current_cluster
             current_cluster_id += 1
-            current_cluster = [lines_data[i + 1]]
+            current_cluster = [data[i + 1]]
         else:
             # "No break" - add to the current cluster
-            current_cluster.append(lines_data[i + 1])
+            current_cluster.append(data[i + 1])
 
     # Add the last cluster
     clusters[current_cluster_id] = current_cluster
@@ -386,10 +448,12 @@ def display_lines(lines, image):
     # Create new image with combined grids
     mask = np.zeros(image.shape[:2], dtype=np.uint8)
     for line in lines:
+        length_x = line.length if line.is_horizontal() else 5
+        length_y = line.length if line.is_vertical() else 5
         cv2.rectangle(
             mask,
-            (round(line[0]), round(line[1])),
-            (round(line[2]), round(line[3])),
+            (round(line.x), round(line.y)),
+            (round(line.x + length_x), round(line.y + length_y)),
             255,
             -1,
         )
@@ -397,15 +461,42 @@ def display_lines(lines, image):
     return mask
 
 
+def remove_line_duplicates(line_clusters, tolerance=10):
+    for cluster_key in line_clusters.keys():
+        if len(line_clusters[cluster_key]) == 1:
+            continue
+        line_cluster = line_clusters[cluster_key]
+        line_cluster.sort(key=lambda l: l.y if l.is_vertical() else l.x)
+        prev_line = line_cluster[0]
+        filtered_lines = [line_cluster[0]]
+        for i, line in enumerate(line_cluster):
+            if i == 0:
+                continue
+            if line.is_vertical():
+                # Only remove lines that have the same starting point
+                if abs(line.y - prev_line.y) > tolerance:
+                    filtered_lines.append(line)
+            elif line.is_horizontal():
+                # Only remove lines that have the same starting point
+                if abs(line.x - prev_line.x) > tolerance:
+                    filtered_lines.append(line)
+            prev_line = line
+        line_clusters[cluster_key] = filtered_lines
+
+
 def detect_table_cells(image, table_bbox):
     table_x_start = table_bbox[0]
     table_y_start = table_bbox[1]
     table_x_end = table_bbox[0] + table_bbox[2]
     table_y_end = table_bbox[1] + table_bbox[3]
-    left_line = (0, 0, 5, table_bbox[3])
-    top_line = (0, 0, table_bbox[2], 5)
-    right_line = (table_bbox[2] - 10, 0, 5, table_bbox[3])
-    bottom_line = (0, table_bbox[3] - 10, table_bbox[2], 5)
+    left_line = TableLine([0, 0, 5, table_bbox[3]], init_from_bbox=True)
+    top_line = TableLine([0, 0, table_bbox[2], 5], init_from_bbox=True)
+    right_line = TableLine(
+        [table_bbox[2] - 10, 0, 5, table_bbox[3]], init_from_bbox=True
+    )
+    bottom_line = TableLine(
+        [0, table_bbox[3] - 10, table_bbox[2], 5], init_from_bbox=True
+    )
 
     np_img = np.array(image)
     # Do the processing only inside the table
@@ -415,7 +506,9 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    combined_grid, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1)
+    combined_grid, vertical_lines, horizontal_lines = core_line_detection(
+        np_img_cropped, 3, 0.1
+    )
 
     vertical_lines.sort(key=lambda line: line.x)
     horizontal_lines.sort(key=lambda line: line.y)
@@ -428,27 +521,6 @@ def detect_table_cells(image, table_bbox):
 
     ## Step 2
 
-    def remove_line_duplicates(line_clusters, axis):
-        secondary_axis = (axis + 1) % 2
-        for cluster_key in line_clusters.keys():
-            if len(line_clusters[cluster_key]) == 1:
-                continue
-            prev_line = line_clusters[cluster_key][0]
-            filtered_lines = [line_clusters[cluster_key][0]]
-            for i, line in enumerate(line_clusters[cluster_key]):
-                if i == 0:
-                    continue
-                # Only remove lines that have the same starting point
-                # print(f"Comparing lines: {line} and {prev_line} on axis {secondary_axis}")
-                if (
-                    abs(line[secondary_axis] - prev_line[secondary_axis])
-                    > line[secondary_axis + 2]
-                ):
-                    filtered_lines.append(line)
-                    # print("retained")
-                prev_line = line
-            line_clusters[cluster_key] = filtered_lines
-
     def get_minimal_line_diff_distance(v_lines, h_lines):
         assert len(h_lines) > 1 and len(v_lines) > 1
         prev_line = v_lines[0]
@@ -457,37 +529,34 @@ def detect_table_cells(image, table_bbox):
         for i, line in v_lines.items():
             if i == 0:
                 continue
-            current_min = min(abs(prev_line[0][0] - line[0][0]), current_min)
+            current_min = min(abs(prev_line[0].x - line[0].x), current_min)
             prev_line = line
         prev_line = h_lines[0]
         for i, line in h_lines.items():
             if i == 0:
                 continue
-            current_min = min(abs(prev_line[0][1] - line[0][1]), current_min)
+            current_min = min(abs(prev_line[0].y - line[0].y), current_min)
             prev_line = line
         if current_min <= 5:
             current_min = 10
         return current_min
 
     # Remove duplicate lines:
-    vertical_clusters = find_clusters_1d_arrays(vertical_lines, 0.01 * table_bbox[3])
-    horizontal_clusters = find_clusters_1d_arrays(
-        horizontal_lines, 0.01 * table_bbox[2], 1, 1
+    vertical_clusters = find_lines_clusters(vertical_lines, 0.01 * table_bbox[3])
+    horizontal_clusters = find_lines_clusters(horizontal_lines, 0.01 * table_bbox[2])
+
+    remove_line_duplicates(vertical_clusters)
+    remove_line_duplicates(horizontal_clusters)
+
+    # 1. Chain the values of both dicts together
+    # 2. Flatten them from the resulting iterable
+    all_lines = list(
+        chain.from_iterable(
+            chain(vertical_clusters.values(), horizontal_clusters.values())
+        )
     )
 
-    remove_line_duplicates(vertical_clusters, 0)
-    remove_line_duplicates(horizontal_clusters, 1)
-
-    new_lines = [
-        (line[0][0], line[0][1], line[0][0] + line[0][2], line[0][1] + line[0][3])
-        for _, line in vertical_clusters.items()
-    ]
-
-    for _, lines in horizontal_clusters.items():
-        for line in lines:
-            new_lines.append((line[0], line[1], line[0] + line[2], line[1] + line[3]))
-
-    new_lines_img = display_lines(new_lines, np_img_cropped)
+    new_lines_img = display_lines(all_lines, np_img_cropped)
 
     min_line_distance = get_minimal_line_diff_distance(
         vertical_clusters, horizontal_clusters
@@ -522,75 +591,3 @@ def detect_table_cells(image, table_bbox):
                 [bbox[0] + table_bbox[0], bbox[1] + table_bbox[1], bbox[2], bbox[3]]
             )
     return table_bounding_boxes
-
-
-@dataclass
-class TableCell:
-    bbox: List[float]
-
-    @property
-    def x(self):
-        return self.box[0]
-
-    @property
-    def y(self):
-        return self.box[1]
-
-    @property
-    def w(self):
-        return self.box[2]
-
-    @property
-    def h(self):
-        return self.box[3]
-
-    @property
-    def center_y(self):
-        return (self.box[1] + self.box[3]) / 2
-
-    @property
-    def center_x(self):
-        return (self.box[0] + self.box[2]) / 2
-
-
-@dataclass
-class TableLine:
-    bbox: List[float]
-    contour: List[float]
-
-    def __init__(self, contour):
-        self.contour = contour
-        self.bbox = cv2.boundingRect(contour)
-
-    @property
-    def x(self):
-        return self.bbox[0]
-
-    @property
-    def y(self):
-        return self.bbox[1]
-
-    @property
-    def length(self):
-        return self.bbox[2] if self.bbox[2] > self.bbox[3] else self.bbox[3]
-
-    def is_horizontal(self):
-        return self.bbox[2] > self.bbox[3]
-
-    def is_vertical(self):
-        return self.bbox[3] > self.bbox[2]
-
-    @property
-    def contours(self):
-        return self.contours
-
-    @property
-    def center(self):
-        if self.is_vertical():
-            return self.bbox[1] + self.bbox[3] // 2
-        elif self.is_horizontal():
-            return self.bbox[0] + self.bbox[2] // 2
-        else:
-            raise ValueError(
-                f"Bounding box for line is neither vertical or horizontal: {self.bbox}"
-            )
