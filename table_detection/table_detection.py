@@ -4,7 +4,9 @@ import numpy as np
 from typing import List, Dict
 from itertools import chain
 import pprint
+import glog as log
 
+# Next step: better debugging in the report
 
 @dataclass
 class TableLine:
@@ -71,61 +73,6 @@ class TableLine:
             raise ValueError(
                 f"Bounding box for line is neither vertical or horizontal: {self.bbox}"
             )
-
-
-def find_clusters_1d(
-    data: List[float], gap_threshold: float, min_cluster_size: int = 1
-) -> Dict[int, List[float]]:
-    """
-    Finds clusters in a 1D list of numbers based on a simple
-    gap threshold.
-
-    Args:
-        data: The list of numbers.
-        gap_threshold: The maximum gap to allow *inside* a cluster.
-        min_cluster_size: The minimum number of items to be
-                          considered a "real" cluster.
-
-    Returns:
-        A dictionary where keys are cluster IDs (0, 1, 2...)
-        and values are the lists of numbers in that cluster.
-    """
-    if not data:
-        return {}
-
-    # Step 1: Sort the data
-    data.sort()
-
-    clusters = {}
-    current_cluster_id = 0
-    current_cluster = [data[0]]
-
-    # Step 2 & 3: Iterate and find gaps
-    for i in range(len(data) - 1):
-        # Calculate the gap
-        gap = data[i + 1] - data[i]
-
-        if gap > gap_threshold:
-            # "Break" - end the current cluster and start a new one
-            clusters[current_cluster_id] = current_cluster
-            current_cluster_id += 1
-            current_cluster = [data[i + 1]]
-        else:
-            # "No break" - add to the current cluster
-            current_cluster.append(data[i + 1])
-
-    # Add the last cluster
-    clusters[current_cluster_id] = current_cluster
-
-    # Step 4 (Optional): Filter by size
-    final_clusters = {}
-    final_id = 0
-    for cluster_data in clusters.values():
-        if len(cluster_data) >= min_cluster_size:
-            final_clusters[final_id] = cluster_data
-            final_id += 1
-
-    return final_clusters
 
 
 def find_table_bounding_boxes(table_grid):
@@ -461,7 +408,7 @@ def display_lines(lines, image):
     return mask
 
 
-def remove_line_duplicates(line_clusters, tolerance=10):
+def remove_line_duplicates(line_clusters, tolerance=5):
     for cluster_key in line_clusters.keys():
         if len(line_clusters[cluster_key]) == 1:
             continue

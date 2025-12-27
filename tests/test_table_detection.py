@@ -3,7 +3,6 @@ import numpy as np
 import cv2
 from table_detection.table_detection import (
     TableLine,
-    find_clusters_1d,
     find_lines_clusters,
     find_table_bounding_boxes,
     core_line_detection,
@@ -31,17 +30,7 @@ def test_table_line_vertical():
     assert line.center == 50 + (200 // 2)
 
 
-# --- Tests for Clustering Functions ---
-
-
-def test_find_clusters_1d():
-    data = [1, 2, 10, 11, 12, 30]
-    # With gap 5: [1,2] and [10,11,12] and [30]
-    clusters = find_clusters_1d(data, gap_threshold=5)
-    assert len(clusters) == 3
-    assert clusters[0] == [1, 2]
-    assert clusters[2] == [30]
-
+# --- Tests for Clustering Function ---
 
 def test_find_lines_clusters():
     # Create dummy TableLines
