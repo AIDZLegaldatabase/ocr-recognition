@@ -4,9 +4,13 @@ import numpy as np
 from typing import List, Dict
 from itertools import chain
 import pprint
-import glog as log
+import logging
+import uuid
 
 # Next step: better debugging in the report
+# Use the module name so we know where logs come from
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class TableLine:
@@ -111,12 +115,21 @@ def find_table_bounding_boxes(table_grid):
     )
 
     bounding_boxes = []
+    logger.debug(
+        f"Now we printed back the lines on the image, smeared lines together with the kernel {kernel_size}."
+        f"Expected bounding boxes number:" + pprint.pformat(f"{len(contours)}")
+    )
     for cnt in contours:
         # 4. Get the bounding box for each blob
         bbox = cv2.boundingRect(cnt)
         if bbox[2] > TABLE_MIN_WIDTH and bbox[3] > TABLE_MIN_HEIGHT:
             bounding_boxes.append(bbox)
-
+        else:
+            logger.debug(f"Size filtering removed bbox: {bbox}")
+    logger.debug(
+        f"Filtered with the sizes ({TABLE_MIN_WIDTH}, {TABLE_MIN_HEIGHT})"
+        f"Bounding boxes candidates:\n" + pprint.pformat(f"{bounding_boxes}")
+    )
     return bounding_boxes
 
 
@@ -216,6 +229,11 @@ def filter_central_v_line(contours_v, img_width):
     ]
     # 2. Flatten them into one big list
     centre_lines = list(chain.from_iterable(center_matching_clusters))
+    if len(center_matching_clusters) > 1:
+        logger.debug(
+            f"Detected the following lines as central and deleting them:\n"
+            + pprint.pformat(f"{centre_lines}")
+        )
 
     # If there's a central cluster then ommit any line item which has the x of
     # the bounding box in the list of centre lines coordinates
@@ -237,7 +255,7 @@ def detect_table_from_image_data(img: np.ndarray):
         img: A NumPy array (OpenCV image)
     """
     if img is None:
-        print("Error: Invalid image data.")
+        logger.error("Error: Invalid image data.")
         return False
     # PARAMS
     MIN_HORIZONTAL_LINES = 1
@@ -251,6 +269,9 @@ def detect_table_from_image_data(img: np.ndarray):
     LINE_LENGTH_RATIO_MIN = 0.05
 
     image_height, image_width, _ = img.shape
+    logger.debug(
+        f"Processing image with dimensions: width-{image_width}, height-{image_height}"
+    )
 
     # Perform the detection in the main function
     combined_grid, vertical_lines, horizontal_lines = core_line_detection(
@@ -281,6 +302,13 @@ def detect_table_from_image_data(img: np.ndarray):
             < (image_width * (1 - IMAGE_X_BORDERS_CROP_TOLERANCE_RATIO))
         )
     ]
+    logger.debug(
+        f"Performed line detection and size filtering and here are the outputs:\n"
+        f"Vertical Lines:"
+        + pprint.pformat(f"{vertical_lines}")
+        + f"\nHorizontal Lines:"
+        + pprint.pformat(f"{horizontal_lines}")
+    )
 
     # Remove central line from vertical lines
     vertical_lines = filter_central_v_line(vertical_lines, image_width)
@@ -294,7 +322,7 @@ def detect_table_from_image_data(img: np.ndarray):
     img_grid = cv2.bitwise_and(combined_grid, combined_grid, mask=mask)
     # Find all the bounding boxes around group of lines
     table_boxes = find_table_bounding_boxes(img_grid)
-    filtered_boxes = []
+    output_boxes = {}
 
     # Filter the bounding boxes by the number of lines inside each one
     for bbox in table_boxes:
@@ -329,9 +357,14 @@ def detect_table_from_image_data(img: np.ndarray):
         if (h_count >= MIN_HORIZONTAL_LINES and v_count >= MIN_VERTICAL_LINES) or (
             h_count + v_count > NUM_TOTAL_LINES
         ):
-            filtered_boxes.append(bbox)
+            box_uuid = uuid.uuid1()
+            output_boxes[box_uuid] = bbox
+            logger.debug(
+                f"Found a table bounding box with {h_count} horizontal"
+                f"lines and {v_count} vertical lines with coordinates: {bbox} and id: {box_uuid}"
+            )
 
-    return filtered_boxes, img_grid
+    return output_boxes, img_grid
 
 
 def find_lines_clusters(
@@ -453,9 +486,7 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    combined_grid, vertical_lines, horizontal_lines = core_line_detection(
-        np_img_cropped, 3, 0.1
-    )
+    _, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1)
 
     vertical_lines.sort(key=lambda line: line.x)
     horizontal_lines.sort(key=lambda line: line.y)
@@ -491,9 +522,24 @@ def detect_table_cells(image, table_bbox):
     # Remove duplicate lines:
     vertical_clusters = find_lines_clusters(vertical_lines, 0.01 * table_bbox[3])
     horizontal_clusters = find_lines_clusters(horizontal_lines, 0.01 * table_bbox[2])
+    logger.debug(
+        f"At the start, the following line clusters are detected: \n"
+        "Vertical Clusters: "
+        + pprint.pformat(f"{vertical_clusters}")
+        + "\nHorizontal Clusters: "
+        + pprint.pformat(f"{vertical_clusters}")
+    )
 
     remove_line_duplicates(vertical_clusters)
     remove_line_duplicates(horizontal_clusters)
+
+    logger.debug(
+        f"After removing duplicates: \n"
+        "Vertical Clusters: "
+        + pprint.pformat(f"{vertical_clusters}")
+        + "\nHorizontal Clusters: "
+        + pprint.pformat(f"{vertical_clusters}")
+    )
 
     # 1. Chain the values of both dicts together
     # 2. Flatten them from the resulting iterable
@@ -527,6 +573,9 @@ def detect_table_cells(image, table_bbox):
     contours, hierarchy = cv2.findContours(
         closed_grid, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE
     )
+    logger.debug(
+        f"With kernel {min_line_distance}, {len(contours)} cell candidates were found"
+    )
     table_bounding_boxes = []
     for cnt in contours:
         # 4. Get the bounding box for each blob
@@ -537,4 +586,7 @@ def detect_table_cells(image, table_bbox):
             table_bounding_boxes.append(
                 [bbox[0] + table_bbox[0], bbox[1] + table_bbox[1], bbox[2], bbox[3]]
             )
+    logger.debug(
+        f"After size filtering, {len(table_bounding_boxes)} cells were admitted"
+    )
     return table_bounding_boxes

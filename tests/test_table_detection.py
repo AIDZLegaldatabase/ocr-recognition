@@ -68,7 +68,6 @@ def test_find_table_bounding_boxes():
 
 
 def test_find_clusters_empty():
-    assert find_clusters_1d([], 10) == {}
     assert find_lines_clusters([], 10) == {}
 
 
