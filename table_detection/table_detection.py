@@ -202,8 +202,8 @@ def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
 
     combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
-    contours_v_lines = [TableLine(cnt) for cnt in contours_v]
-    contours_h_lines = [TableLine(cnt) for cnt in contours_h]
+    contours_v_lines = [TableLine(cnt) for cnt in contours_v if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]]
+    contours_h_lines = [TableLine(cnt) for cnt in contours_h if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]]
     return combined_grid, contours_v_lines, contours_h_lines
 
 
@@ -486,7 +486,7 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    _, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1)
+    _, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1, close_gaps=True)
 
     vertical_lines.sort(key=lambda line: line.x)
     horizontal_lines.sort(key=lambda line: line.y)
