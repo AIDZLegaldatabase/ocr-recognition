@@ -9,7 +9,7 @@ from classes.pdf_parser import JoradpFileParse
 from pathlib import Path
 import re
 import json
-import glog as log
+import logging
 import base64
 from io import BytesIO
 from PIL import Image
@@ -17,6 +17,18 @@ import os
 import tempfile
 import webbrowser
 import os
+
+def setup_logging():
+    # Check if a DEBUG environment variable is set
+    # Run in terminal via: DEBUG=True pytest
+    is_debug = os.getenv("DEBUG", "false").lower() == "true"
+    
+    log_level = logging.DEBUG if is_debug else logging.INFO
+    
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(funcName)s - %(levelname)s - %(message)s'
+    )
 
 # cases 1 python .\test_tables.py -d -input_pdf_file ./data_test/F1962008.pdf
 # cases 2 python .\test_tables.py -d -input_pdf_file ./data_test/F2024007.pdf
@@ -172,15 +184,17 @@ class HtmlReporter:
             with os.fdopen(fd, "w") as tmp:
                 tmp.write(self._generate_html_content())
 
-            log.info(f"Opening temporary report: {path}")
+            logger.info(f"Opening temporary report: {path}")
             webbrowser.open(f"file://{path}")
 
         except Exception as e:
-            log.error(f"Failed to open report: {e}")
+            logger.error(f"Failed to open report: {e}")
 
 
 if __name__ == "__main__":
     args = args_parser()
+    setup_logging()
+    logger = logging.getLogger(__name__)
     pages_collections = {}
     if args.input_pdf_dir != "":
         pdf_files_list = get_formatted_pdfs(args.input_pdf_dir)
@@ -208,7 +222,7 @@ if __name__ == "__main__":
 
     if args.generate_report:
         reporter = HtmlReporter()
-    log.info("Starting evaluation")
+    logger.info("Starting evaluation")
     table_tp = 0
     table_fp = 0
     table_fn = 0
@@ -220,7 +234,7 @@ if __name__ == "__main__":
     for test_file in pages_collections.keys():
         # Load images
         image_to_process = pages_collections[test_file]
-        log.info(f"Processing {test_file}...")
+        logger.info(f"Processing {test_file}...")
         # Load Ground Truth
         gt_path = os.path.join(dir_path, f"{test_file}-annotations.json")
         with open(gt_path, "r") as f:
@@ -243,7 +257,8 @@ if __name__ == "__main__":
             matched_table_indices = set()
             failed_table_detection = False
             failed_cell_detection = False
-            for p_tbl_idx, p_table in enumerate(predicted_tables):
+            for p_tbl_key in predicted_tables.keys():
+                p_table = predicted_tables[p_tbl_key]
                 p_table_x, p_table_y, p_table_width, p_table_height = p_table
 
                 # Find best GT match
@@ -258,9 +273,10 @@ if __name__ == "__main__":
 
                 # Check Table Match
                 if best_table_iou < 0.5:  # Threshold
-                    log.error(
-                        f"Page {i} from file {test_file}: False Positive Table detected at {p_table}"
-                    )
+                    if args.generate_report:
+                        logger.error(
+                            f"Page {i} from file {test_file}: False Positive Table detected at {p_table}"
+                        )
                     table_fp += 1
                     cv2.rectangle(
                         debug_image,
@@ -272,9 +288,10 @@ if __name__ == "__main__":
                     failed_table_detection = True
                     continue  # Skip cell check for invalid table
                 else:
-                    log.info(
-                        f"Page {i} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
-                    )
+                    if args.generate_report:
+                        logger.info(
+                            f"Page {i} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
+                        )
                     table_tp += 1
                     matched_table_indices.add(best_table_gt_idx)
                     # print green (good) prediction
@@ -296,6 +313,7 @@ if __name__ == "__main__":
                     )
 
                     # Check Cells for this matched table
+                    logger.debug(f"About to detect cells in the table: {p_tbl_key}")
                     pred_cells = detect_table_cells(page_image_rgb, p_table)
                     gt_cells = gt_tables[best_table_gt_idx].get("cells", [])
 
@@ -318,9 +336,10 @@ if __name__ == "__main__":
 
                         # Check Cell Match
                         if best_cell_iou < 0.5:  # Threshold
-                            log.error(
-                                f"Page {i} from file {test_file}: False Positive Cell detected at {p_cell}"
-                            )
+                            if args.generate_report:
+                                logger.error(
+                                    f"Page {i} from file {test_file}: False Positive Cell detected at {p_cell}"
+                                )
                             cell_fp += 1
                             cv2.rectangle(
                                 debug_image,
@@ -331,9 +350,10 @@ if __name__ == "__main__":
                             )  # Red for Fail cell
                             failed_cell_detection = True
                         else:
-                            log.info(
-                                f"Page {i} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
-                            )
+                            if args.generate_report:
+                                logger.info(
+                                    f"Page {i} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
+                                )
                             cell_tp += 1
                             matched_cell_indices.add(best_cell_gt_idx)
                             cv2.rectangle(
@@ -348,9 +368,10 @@ if __name__ == "__main__":
                     for g_cell_idx, g_cell in enumerate(gt_cells):
                         if g_cell_idx not in matched_cell_indices:
                             g_cell_x, g_cell_y, g_cell_w, g_cell_h = g_cell
-                            log.error(
-                                f"Page {i} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
-                            )
+                            if args.generate_report:
+                                logger.error(
+                                    f"Page {i} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
+                                )
                             cell_fn += 1
                             cv2.rectangle(
                                 debug_image,
@@ -365,9 +386,10 @@ if __name__ == "__main__":
             for g_idx, g_tbl in enumerate(gt_tables):
                 if g_idx not in matched_table_indices:
                     gx, gy, gw, gh = g_tbl["bbox"]
-                    log.error(
-                        f"Page {i} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
-                    )
+                    if args.generate_report:
+                        logger.error(
+                            f"Page {i} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
+                        )
                     table_fn += 1
                     cv2.rectangle(
                         debug_image, (gx, gy), (gx + gw, gy + gh), (255, 0, 255), 3
@@ -402,7 +424,11 @@ if __name__ == "__main__":
     # Finalize
     if args.generate_report:
         reporter.show()
-    log.info(
+    assert (table_tp + table_fp) > 0,  f"Sum of zeroes: {table_tp} + {table_fp}"
+    assert (table_tp + table_fn) > 0, f"Sum of zeroes: {table_tp} + {table_fn}"
+    assert (cell_tp + cell_fp) > 0, f"Sum of zeroes: {cell_tp} + {cell_fp}"
+    assert (cell_tp + cell_fn) > 0, f"Sum of zeroes: {cell_tp} + {cell_fn}"
+    logger.info(
         "Evaluation complete....\n"
         "Table Detection:\n "
         f"Tables Detected: {table_tp} \t Tables Missed: {table_fn} \t Precison: {table_tp/(table_tp + table_fp)} \t Recall: {table_tp/(table_tp + table_fn)}\n"

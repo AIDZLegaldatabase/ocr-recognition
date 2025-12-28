@@ -17,3 +17,4 @@ opencv-python
 PyQt5==5.15.11
 glog
 jinja2
+pytest
