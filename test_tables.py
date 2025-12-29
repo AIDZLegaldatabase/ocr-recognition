@@ -252,13 +252,14 @@ if __name__ == "__main__":
             detection_image = page_image_rgb.copy()
             cell_debug_image = np.zeros(detection_image.shape[:2], dtype=np.uint8)
             cv2.putText(
-            cell_debug_image,
-            "Cell detection debug",
-            (50, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,2,
-            (255),
-            1,
-        )
+                cell_debug_image,
+                "Cell detection debug",
+                (50, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                2,
+                (255),
+                1,
+            )
 
             # 2. detect tables from image
             predicted_tables, debug_table_detected_lines_image = (
@@ -331,7 +332,9 @@ if __name__ == "__main__":
                     )
 
                     # Check Cells for this matched table
-                    logger.debug(f"About to detect cells in the table: {p_tbl_key}")
+                    logger.debug(
+                        f"About to detect cells in the table: {p_tbl_key} with TL corner: ({p_table_x},{p_table_y})"
+                    )
                     pred_cells, debug_cell_detected_lines_image = detect_table_cells(
                         page_image_rgb, p_table
                     )
@@ -426,9 +429,7 @@ if __name__ == "__main__":
                 if failed_cell_detection:
                     combined_display = cv2.hconcat(
                         [
-                            cv2.cvtColor(
-                                cell_debug_image, cv2.COLOR_GRAY2BGR
-                            ),
+                            cv2.cvtColor(cell_debug_image, cv2.COLOR_GRAY2BGR),
                             detection_image,
                         ]
                     )

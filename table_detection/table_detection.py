@@ -131,7 +131,9 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False, close_gaps_kernel_size=10):
+def core_line_detection(
+    img, kernel_size, min_line_ratio, close_gaps=False, close_gaps_kernel_size=10
+):
     """_summary_
 
     Args:
@@ -373,7 +375,8 @@ def detect_table_from_image_data(img: np.ndarray):
             img_grid,
             "Table detection debug",
             (50, 50),
-            cv2.FONT_HERSHEY_SIMPLEX,5,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            5,
             (255),
             1,
         )
@@ -479,6 +482,7 @@ def remove_line_duplicates(line_clusters, tolerance=5):
 
 
 def detect_table_cells(image, table_bbox):
+    MIN_LINE_RATIO_DETECTION = 0.075
     table_x_start = table_bbox[0]
     table_y_start = table_bbox[1]
     table_x_end = table_bbox[0] + table_bbox[2]
@@ -500,7 +504,9 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    _, vertical_lines, horizontal_lines = core_line_detection(np_img_cropped, 3, 0.1, close_gaps=True)
+    _, vertical_lines, horizontal_lines = core_line_detection(
+        np_img_cropped, 3, MIN_LINE_RATIO_DETECTION, close_gaps=True
+    )
 
     vertical_lines.sort(key=lambda line: line.x)
     horizontal_lines.sort(key=lambda line: line.y)
@@ -576,7 +582,7 @@ def detect_table_cells(image, table_bbox):
     # Expirementation showed that using min distance between lines minus
     # a gap works the best
     if min_line_distance <= 10:
-            min_line_distance = 15
+        min_line_distance = 15
     kernel_size = (abs(min_line_distance - 10), abs(min_line_distance - 10))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
@@ -593,9 +599,9 @@ def detect_table_cells(image, table_bbox):
     table_bounding_boxes = []
     for cnt in contours:
         # 4. Get the bounding box for each blob
-        #TODO: Change this size filtering with something a bit more complex (e.g check floating cells)
+        # TODO: Change this size filtering with something a bit more complex (e.g check floating cells)
         bbox = cv2.boundingRect(cnt)
-        if bbox[3] / table_bbox[3] < 0.016 or bbox[2] / table_bbox[2] < 0.016:
+        if bbox[3] / table_bbox[3] < 0.018 or bbox[2] / table_bbox[2] < 0.018:
             continue
         if bbox[2] < table_bbox[2] * 0.95 or bbox[3] < table_bbox[3] * 0.95:
             table_bounding_boxes.append(
