@@ -7,8 +7,6 @@ import pprint
 import logging
 import uuid
 
-# Next step: better debugging in the report
-# Use the module name so we know where logs come from
 logger = logging.getLogger(__name__)
 
 
@@ -595,8 +593,9 @@ def detect_table_cells(image, table_bbox):
     table_bounding_boxes = []
     for cnt in contours:
         # 4. Get the bounding box for each blob
+        #TODO: Change this size filtering with something a bit more complex (e.g check floating cells)
         bbox = cv2.boundingRect(cnt)
-        if bbox[3] / table_bbox[3] < 0.02 or bbox[2] / table_bbox[2] < 0.02:
+        if bbox[3] / table_bbox[3] < 0.016 or bbox[2] / table_bbox[2] < 0.016:
             continue
         if bbox[2] < table_bbox[2] * 0.95 or bbox[3] < table_bbox[3] * 0.95:
             table_bounding_boxes.append(
