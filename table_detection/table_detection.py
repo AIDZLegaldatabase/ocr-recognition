@@ -133,7 +133,7 @@ def find_table_bounding_boxes(table_grid):
     return bounding_boxes
 
 
-def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
+def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False, close_gaps_kernel_size=10):
     """_summary_
 
     Args:
@@ -178,7 +178,7 @@ def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
         thresh_x.astype(np.uint8), cv2.MORPH_OPEN, ver_kernel
     )
     if close_gaps:
-        kernel_size = (10, 10)
+        kernel_size = (close_gaps_kernel_size, close_gaps_kernel_size)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
         # "Closing" = Dilate (thicken) then Erode (thin)
@@ -202,8 +202,16 @@ def core_line_detection(img, kernel_size, min_line_ratio, close_gaps=False):
 
     combined_grid = cv2.bitwise_or(morphed_horizontal, morphed_vertical)
 
-    contours_v_lines = [TableLine(cnt) for cnt in contours_v if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]]
-    contours_h_lines = [TableLine(cnt) for cnt in contours_h if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]]
+    contours_v_lines = [
+        TableLine(cnt)
+        for cnt in contours_v
+        if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]
+    ]
+    contours_h_lines = [
+        TableLine(cnt)
+        for cnt in contours_h
+        if cv2.boundingRect(cnt)[2] != cv2.boundingRect(cnt)[3]
+    ]
     return combined_grid, contours_v_lines, contours_h_lines
 
 
@@ -363,6 +371,14 @@ def detect_table_from_image_data(img: np.ndarray):
                 f"Found a table bounding box with {h_count} horizontal"
                 f"lines and {v_count} vertical lines with coordinates: {bbox} and id: {box_uuid}"
             )
+        cv2.putText(
+            img_grid,
+            "Table detection debug",
+            (50, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,5,
+            (255),
+            1,
+        )
 
     return output_boxes, img_grid
 
@@ -515,8 +531,6 @@ def detect_table_cells(image, table_bbox):
                 continue
             current_min = min(abs(prev_line[0].y - line[0].y), current_min)
             prev_line = line
-        if current_min <= 5:
-            current_min = 10
         return current_min
 
     # Remove duplicate lines:
@@ -527,7 +541,7 @@ def detect_table_cells(image, table_bbox):
         "Vertical Clusters: "
         + pprint.pformat(f"{vertical_clusters}")
         + "\nHorizontal Clusters: "
-        + pprint.pformat(f"{vertical_clusters}")
+        + pprint.pformat(f"{horizontal_clusters}")
     )
 
     remove_line_duplicates(vertical_clusters)
@@ -538,7 +552,7 @@ def detect_table_cells(image, table_bbox):
         "Vertical Clusters: "
         + pprint.pformat(f"{vertical_clusters}")
         + "\nHorizontal Clusters: "
-        + pprint.pformat(f"{vertical_clusters}")
+        + pprint.pformat(f"{horizontal_clusters}")
     )
 
     # 1. Chain the values of both dicts together
@@ -563,7 +577,9 @@ def detect_table_cells(image, table_bbox):
     # (25, 25) means it will connect lines that are up to 25px apart.
     # Expirementation showed that using min distance between lines minus
     # a gap works the best
-    kernel_size = (abs(min_line_distance - 5), abs(min_line_distance - 5))
+    if min_line_distance <= 10:
+            min_line_distance = 15
+    kernel_size = (abs(min_line_distance - 10), abs(min_line_distance - 10))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
     # "Closing" = Dilate (thicken) then Erode (thin)
@@ -589,4 +605,4 @@ def detect_table_cells(image, table_bbox):
     logger.debug(
         f"After size filtering, {len(table_bounding_boxes)} cells were admitted"
     )
-    return table_bounding_boxes
+    return table_bounding_boxes, closed_grid
