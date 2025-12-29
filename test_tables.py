@@ -18,17 +18,19 @@ import tempfile
 import webbrowser
 import os
 
+
 def setup_logging():
     # Check if a DEBUG environment variable is set
     # Run in terminal via: DEBUG=True pytest
     is_debug = os.getenv("DEBUG", "false").lower() == "true"
-    
+
     log_level = logging.DEBUG if is_debug else logging.INFO
-    
+
     logging.basicConfig(
         level=log_level,
-        format='%(asctime)s - %(funcName)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(funcName)s - %(levelname)s - %(message)s",
     )
+
 
 # cases 1 python .\test_tables.py -d -input_pdf_file ./data_test/F1962008.pdf
 # cases 2 python .\test_tables.py -d -input_pdf_file ./data_test/F2024007.pdf
@@ -241,13 +243,29 @@ if __name__ == "__main__":
             ground_truth = json.load(f)
 
         for i, pil_page_image in enumerate(image_to_process):
+            logger.debug(
+                f"############################# Processing page {i + 2} from file {test_file} #############################"
+            )
             # 1. Convert PIL Image (assuming RGB) to OpenCV format (BGR)
             # and create a copy of the image to draw on
             page_image_rgb = np.array(pil_page_image)
-            debug_image = page_image_rgb.copy()
+            detection_image = page_image_rgb.copy()
+            cell_debug_image = np.zeros(detection_image.shape[:2], dtype=np.uint8)
+            cv2.putText(
+            cell_debug_image,
+            "Cell detection debug",
+            (50, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,2,
+            (255),
+            1,
+        )
 
             # 2. detect tables from image
-            predicted_tables, img_grid = detect_table_from_image_data(page_image_rgb)
+            predicted_tables, debug_table_detected_lines_image = (
+                detect_table_from_image_data(page_image_rgb)
+            )
+            if len(predicted_tables) == 0:
+                logger.debug(f"Page {i + 2} from file {test_file}: No tables")
 
             # Retrieve GT for this page
             page_idx_str = str(i)
@@ -275,11 +293,11 @@ if __name__ == "__main__":
                 if best_table_iou < 0.5:  # Threshold
                     if args.generate_report:
                         logger.error(
-                            f"Page {i} from file {test_file}: False Positive Table detected at {p_table}"
+                            f"Page {i + 2} from file {test_file}: False Positive Table detected at {p_table}"
                         )
                     table_fp += 1
                     cv2.rectangle(
-                        debug_image,
+                        detection_image,
                         (p_table_x, p_table_y),
                         (p_table_x + p_table_width, p_table_y + p_table_height),
                         (0, 0, 255),
@@ -290,20 +308,20 @@ if __name__ == "__main__":
                 else:
                     if args.generate_report:
                         logger.info(
-                            f"Page {i} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
+                            f"Page {i + 2} from file {test_file}: Table Matched (IoU: {best_table_iou:.2f})"
                         )
                     table_tp += 1
                     matched_table_indices.add(best_table_gt_idx)
                     # print green (good) prediction
                     cv2.rectangle(
-                        debug_image,
+                        detection_image,
                         (p_table_x, p_table_y),
                         (p_table_x + p_table_width, p_table_y + p_table_height),
                         (0, 255, 0),
                         2,
                     )
                     cv2.putText(
-                        debug_image,
+                        detection_image,
                         "TP",
                         (p_table_x, p_table_y - 5),
                         cv2.FONT_HERSHEY_SIMPLEX,
@@ -314,7 +332,13 @@ if __name__ == "__main__":
 
                     # Check Cells for this matched table
                     logger.debug(f"About to detect cells in the table: {p_tbl_key}")
-                    pred_cells = detect_table_cells(page_image_rgb, p_table)
+                    pred_cells, debug_cell_detected_lines_image = detect_table_cells(
+                        page_image_rgb, p_table
+                    )
+                    cell_debug_image[
+                        p_table[1] : p_table[1] + p_table[3],
+                        p_table[0] : p_table[0] + p_table[2],
+                    ] = debug_cell_detected_lines_image
                     gt_cells = gt_tables[best_table_gt_idx].get("cells", [])
 
                     # Check all indices for false negatives
@@ -338,11 +362,11 @@ if __name__ == "__main__":
                         if best_cell_iou < 0.5:  # Threshold
                             if args.generate_report:
                                 logger.error(
-                                    f"Page {i} from file {test_file}: False Positive Cell detected at {p_cell}"
+                                    f"Page {i + 2} from file {test_file}: False Positive Cell detected at {p_cell}"
                                 )
                             cell_fp += 1
                             cv2.rectangle(
-                                debug_image,
+                                detection_image,
                                 (p_cell_x, p_cell_y),
                                 (p_cell_x + p_cell_width, p_cell_y + p_cell_height),
                                 (0, 0, 255),
@@ -352,12 +376,12 @@ if __name__ == "__main__":
                         else:
                             if args.generate_report:
                                 logger.info(
-                                    f"Page {i} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
+                                    f"Page {i + 2} from file {test_file}: Cell Matched (IoU: {best_cell_iou:.2f})"
                                 )
                             cell_tp += 1
                             matched_cell_indices.add(best_cell_gt_idx)
                             cv2.rectangle(
-                                debug_image,
+                                detection_image,
                                 (p_cell_x, p_cell_y),
                                 (p_cell_x + p_cell_width, p_cell_y + p_cell_height),
                                 (0, 255, 0),
@@ -370,11 +394,11 @@ if __name__ == "__main__":
                             g_cell_x, g_cell_y, g_cell_w, g_cell_h = g_cell
                             if args.generate_report:
                                 logger.error(
-                                    f"Page {i} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
+                                    f"Page {i + 2} from file {test_file}: Missed Cell (FN) at {g_cell}, index {g_cell_idx}"
                                 )
                             cell_fn += 1
                             cv2.rectangle(
-                                debug_image,
+                                detection_image,
                                 (g_cell_x, g_cell_y),
                                 (g_cell_x + g_cell_w, g_cell_y + g_cell_h),
                                 (255, 0, 255),
@@ -388,27 +412,49 @@ if __name__ == "__main__":
                     gx, gy, gw, gh = g_tbl["bbox"]
                     if args.generate_report:
                         logger.error(
-                            f"Page {i} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
+                            f"Page {i + 2} from file {test_file}: Missed Table (FN) at {g_tbl['bbox']}"
                         )
                     table_fn += 1
                     cv2.rectangle(
-                        debug_image, (gx, gy), (gx + gw, gy + gh), (255, 0, 255), 3
+                        detection_image, (gx, gy), (gx + gw, gy + gh), (255, 0, 255), 3
                     )  # Purple for Missed
                     failed_table_detection = True
 
             if args.generate_report and (
                 failed_table_detection or failed_cell_detection
             ):
+                if failed_cell_detection:
+                    combined_display = cv2.hconcat(
+                        [
+                            cv2.cvtColor(
+                                cell_debug_image, cv2.COLOR_GRAY2BGR
+                            ),
+                            detection_image,
+                        ]
+                    )
+                if failed_table_detection:
+                    combined_display = cv2.hconcat(
+                        [
+                            cv2.cvtColor(
+                                debug_table_detected_lines_image, cv2.COLOR_GRAY2BGR
+                            ),
+                            detection_image,
+                        ]
+                    )
                 reporter.add_failure(
                     i + 2,
                     test_file,
-                    debug_image,
+                    combined_display,
                     f"Failed table detection: {failed_table_detection}. Failed Cell detection: {failed_cell_detection}",
                 )
             if args.debug_mode:
-
                 combined_display = cv2.hconcat(
-                    [cv2.cvtColor(img_grid, cv2.COLOR_GRAY2BGR), debug_image]
+                    [
+                        cv2.cvtColor(
+                            debug_table_detected_lines_image, cv2.COLOR_GRAY2BGR
+                        ),
+                        detection_image,
+                    ]
                 )
                 # 6. Show the combined image and wait
                 cv2.imshow(window_name, combined_display)
@@ -424,7 +470,7 @@ if __name__ == "__main__":
     # Finalize
     if args.generate_report:
         reporter.show()
-    assert (table_tp + table_fp) > 0,  f"Sum of zeroes: {table_tp} + {table_fp}"
+    assert (table_tp + table_fp) > 0, f"Sum of zeroes: {table_tp} + {table_fp}"
     assert (table_tp + table_fn) > 0, f"Sum of zeroes: {table_tp} + {table_fn}"
     assert (cell_tp + cell_fp) > 0, f"Sum of zeroes: {cell_tp} + {cell_fp}"
     assert (cell_tp + cell_fn) > 0, f"Sum of zeroes: {cell_tp} + {cell_fn}"
