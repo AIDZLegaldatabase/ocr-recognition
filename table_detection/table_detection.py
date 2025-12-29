@@ -578,7 +578,7 @@ def detect_table_cells(image, table_bbox):
     # Expirementation showed that using min distance between lines minus
     # a gap works the best
     if min_line_distance <= 10:
-            min_line_distance = 11
+            min_line_distance = 15
     kernel_size = (abs(min_line_distance - 10), abs(min_line_distance - 10))
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
 
