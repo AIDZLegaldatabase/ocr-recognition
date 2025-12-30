@@ -626,7 +626,7 @@ def detect_table_cells(image, table_bbox):
         # 4. Get the bounding box for each blob
         # TODO: Change this size filtering with something a bit more complex (e.g check floating cells)
         bbox = cv2.boundingRect(cnt)
-        if bbox[2] / table_bbox[2] < 0.025:
+        if bbox[2] / table_bbox[2] < 0.025 or bbox[3] / table_bbox[3] < 0.015:
             continue
         if bbox[2] < table_bbox[2] * 0.95 or bbox[3] < table_bbox[3] * 0.95:
             table_bounding_boxes.append(
