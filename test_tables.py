@@ -478,7 +478,7 @@ if __name__ == "__main__":
     logger.info(
         "Evaluation complete....\n"
         "Table Detection:\n "
-        f"Tables Detected: {table_tp} \t Tables Missed: {table_fn} \t Precison: {table_tp/(table_tp + table_fp)} \t Recall: {table_tp/(table_tp + table_fn)}\n"
+        f"Tables Detected: {table_tp} \t Tables Missed: {table_fn} \t False Tables: {table_fp}\t Precison: {table_tp/(table_tp + table_fp)} \t Recall: {table_tp/(table_tp + table_fn)}\n"
         "Cell Detection:\n "
-        f"Cells Detected: {cell_tp} \t Cells Missed: {cell_fn} \t Precison: {cell_tp/(cell_tp + cell_fp)} \t Recall: {cell_tp/(cell_tp + cell_fn)}"
+        f"Cells Detected: {cell_tp} \t Cells Missed: {cell_fn} \t False Cells: {cell_fp}\t Precison: {cell_tp/(cell_tp + cell_fp)} \t Recall: {cell_tp/(cell_tp + cell_fn)}"
     )
