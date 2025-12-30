@@ -482,7 +482,7 @@ def remove_line_duplicates(line_clusters, tolerance=5):
 
 
 def detect_table_cells(image, table_bbox):
-    MIN_LINE_RATIO_DETECTION = 0.075
+    MIN_LINE_RATIO_DETECTION = 0.03
     table_x_start = table_bbox[0]
     table_y_start = table_bbox[1]
     table_x_end = table_bbox[0] + table_bbox[2]
@@ -504,8 +504,33 @@ def detect_table_cells(image, table_bbox):
         :,
     ]
 
-    _, vertical_lines, horizontal_lines = core_line_detection(
-        np_img_cropped, 3, MIN_LINE_RATIO_DETECTION, close_gaps=True
+    def preprocess_for_lines(img):
+        # Convert to grayscale if not already
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # Invert the image if text is black on white (OpenCV likes white objects)
+        # We want the lines and text to be white (255)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+        # Define a kernel for horizontal lines
+        # Adjust '40' based on your image resolution; it should be longer than any single character
+        h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 1))
+        
+        # Remove everything that isn't at least 40 pixels wide
+        h_cleaned = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, h_kernel)
+        
+        # Repeat for vertical
+        v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 15))
+        v_cleaned = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, v_kernel)
+        
+        # Combine them back to get a "cleaned" grid for Sobel
+        cleaned_grid = cv2.add(h_cleaned, v_cleaned)
+        
+        return cleaned_grid
+    preprocessed_img = preprocess_for_lines(np_img_cropped)
+    
+    cell_debug_img, vertical_lines, horizontal_lines = core_line_detection(
+        cv2.cvtColor(preprocessed_img, cv2.COLOR_GRAY2BGR), 3, MIN_LINE_RATIO_DETECTION, close_gaps=True
     )
 
     vertical_lines.sort(key=lambda line: line.x)
@@ -601,7 +626,7 @@ def detect_table_cells(image, table_bbox):
         # 4. Get the bounding box for each blob
         # TODO: Change this size filtering with something a bit more complex (e.g check floating cells)
         bbox = cv2.boundingRect(cnt)
-        if bbox[3] / table_bbox[3] < 0.018 or bbox[2] / table_bbox[2] < 0.018:
+        if bbox[2] / table_bbox[2] < 0.025:
             continue
         if bbox[2] < table_bbox[2] * 0.95 or bbox[3] < table_bbox[3] * 0.95:
             table_bounding_boxes.append(
